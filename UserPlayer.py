@@ -100,7 +100,12 @@ class UserPlayer(Player):
                 cellTop = row * self.cellHeight
                 cellBot = cellTop + self.cellHeight
                 canvas.create_rectangle(cellLeft, cellTop, cellRight, cellBot,
-                    fill= rgbString(rgb), width=1)
+                    fill= rgbString(rgb), width=0)
+        xCenter = self.width / 2
+        yCenter = self.height / 2
+        radius = 3
+        canvas.create_oval(xCenter - radius, yCenter - radius,
+                           xCenter + radius, yCenter + radius, fill="black")
 
     def mousePressedWrapper(self, event, canvas):
         self.mousePressed(event)
