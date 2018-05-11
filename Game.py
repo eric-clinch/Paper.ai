@@ -74,7 +74,7 @@ class Player(object):
             windowR = r - topR
             windowC = c - leftC
             if (inBounds(r,c,board)):
-                windowHeads.apppend((windowR, windowC))
+                windowHeads.append((windowR, windowC))
 
         return windowHeads
 
@@ -192,7 +192,7 @@ class Game(object):
 
         livePlayers = list(filter(lambda p: (not p.isDead), self.players))
 
-        heads = list(map(lambda p: (p.x, p.y)), self.players)
+        heads = list(map(lambda p: (p.r, p.c), self.players))
         for player in livePlayers:
             player.setState(self.board, heads)
         for player in livePlayers:
