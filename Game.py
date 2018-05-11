@@ -8,6 +8,9 @@ WINDOW_SIZE = 51
 def inBounds(r,c,board):
     return ((r > 0) and (r < len(board)) and (c > 0) and (c < len(board)))
 
+def currentMilliseconds():
+     return int(round(time.time() * 1000))
+
 # Player class for game
 class Player(object):
     def getWindowCoords(self, extent):
@@ -29,6 +32,7 @@ class Player(object):
         self.index = index
         self.direction = random.choice(DIRECTIONS)
         self.isDead = False
+        self.wasHomeLastTick = False
 
         maxCoord = len(board) - 1 - startBlobExtent
 
@@ -182,16 +186,20 @@ class Game(object):
             player.c += dc
             if not inBounds(player.r, player.c, self.board):
                 deathList.add(player)
+                player.isDead = True
         livePlayers = list(filter(lambda p: (not p.isDead), self.players))
         for player in livePlayers:
             (territoryOwner, tailOwner) = self.board[player.r][player.c]
             if (tailOwner != 0):
                 deathList.add(self.playerFromIndex(tailOwner))
+                self.playerFromIndex(tailOwner).isDead = True
             for other in livePlayers:
                 if (player.index != other.index
                         and player.r == other.r and player.c == other.c):
                     deathList.add(player)
-                    deathList.add(player)
+                    deathList.add(other)
+                    player.isDead = True
+                    other.isDead = True
         for player in deathList:
             self.killPlayer(player)
 
@@ -200,14 +208,21 @@ class Game(object):
         for player in livePlayers:
             (territoryOwner, tailOwner) = self.board[player.r][player.c]
             if (territoryOwner != player.index):
+                player.wasHomeLastTick = False
                 self.board[player.r][player.c] = (territoryOwner, player.index)
             else:
-                self.collectTerritory(player)
+                if not player.wasHomeLastTick:
+                    self.collectTerritory(player)
+                player.wasHomeLastTick = True
 
         if self.allPlayersDead():
             self.running = False
 
     def run(self):
         while self.running:
+            startTime = currentMilliseconds()
             self.tick()
-            time.sleep(self.timerDelay / 1000)
+            timeDelta = currentMilliseconds() - startTime
+            sleepTime = self.timerDelay - timeDelta
+            if (sleepTime > 0):
+                time.sleep(sleepTime / 1000)
