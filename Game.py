@@ -50,7 +50,7 @@ class Player(object):
             board[r][c] = (self.index, False)
 
     def getWindow(self, board):
-        window = [[(-1, 0)] * WINDOW_SIZE for i in range(WINDOW_SIZE)]
+        window = [[(-1, False)] * WINDOW_SIZE for i in range(WINDOW_SIZE)]
         boardCoords = self.getWindowCoords(WINDOW_SIZE // 2)
 
         leftC = self.c - (WINDOW_SIZE // 2)
@@ -64,9 +64,11 @@ class Player(object):
 
         return window
 
-    def setState(self, board):
+    def setState(self, board, heads):
         if not self.isDead:
-            self.interface.setState((self.getWindow(board), self.direction))
+            self.interface.setState((self.getWindow(board),
+                                     self.direction,
+                                     heads))
         else:
             return None
 
@@ -93,7 +95,7 @@ class Game(object):
         # how far from the center of the start blob the blob extends
         self.startBlobExtent = 1
         self.players = []
-        self.timerDelay = 200
+        self.timerDelay = 50
         self.running = True
         for player in players:
             self.addPlayer(player)
@@ -176,8 +178,9 @@ class Game(object):
 
         livePlayers = list(filter(lambda p: (not p.isDead), self.players))
 
+        heads = list(map(lambda p: (p.x, p.y)), self.players)
         for player in livePlayers:
-            player.setState(self.board)
+            player.setState(self.board, heads)
         for player in livePlayers:
             player.getMove()
         for player in livePlayers:
@@ -195,7 +198,7 @@ class Game(object):
                 self.playerFromIndex(tailOwner).isDead = True
             for other in livePlayers:
                 if (player.index != other.index
-                        and player.r == other.r and player.c == other.c):
+                    and player.r == other.r and player.c == other.c):
                     deathList.add(player)
                     deathList.add(other)
                     player.isDead = True

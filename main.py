@@ -1,10 +1,8 @@
 from UserPlayer import UserPlayer
+from SocketPlayer import SocketPlayer
 from Game import Game
 
-players = [UserPlayer(),
-           UserPlayer(upKey = "w", downKey = "s",
-                      leftKey = "a", rightKey = "d")
-          ]
+players = [UserPlayer(), SocketPlayer()]
 game = Game(100, players)
 
 game.run()
