@@ -46,7 +46,7 @@ class Player(object):
             board[r][c] = (self.index, False)
 
     def getWindow(self, board):
-        window = [[(-1, False)] * WINDOW_SIZE for i in range(WINDOW_SIZE)]
+        window = [[(-1, 0)] * WINDOW_SIZE for i in range(WINDOW_SIZE)]
         boardCoords = self.getWindowCoords(WINDOW_SIZE // 2)
 
         leftC = self.c - (WINDOW_SIZE // 2)
@@ -89,7 +89,7 @@ class Game(object):
         # how far from the center of the start blob the blob extends
         self.startBlobExtent = 1
         self.players = []
-        self.timerDelay = 50
+        self.timerDelay = 200
         self.running = True
         for player in players:
             self.addPlayer(player)
@@ -189,7 +189,7 @@ class Game(object):
                 deathList.add(self.playerFromIndex(tailOwner))
             for other in livePlayers:
                 if (player.index != other.index
-                    and player.r == other.r and player.c == other.c):
+                        and player.r == other.r and player.c == other.c):
                     deathList.add(player)
                     deathList.add(player)
         for player in deathList:
