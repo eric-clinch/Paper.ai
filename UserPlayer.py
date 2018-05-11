@@ -3,8 +3,7 @@ from Player import Player
 from Enums import Directions
 import time
 import random
-WINDOW_SIZE = 51
-# from Game import WINDOW_SIZE
+from Game import WINDOW_SIZE
 import threading
 
 from tkinter import *
@@ -13,10 +12,12 @@ from tkinter import *
 # UI based off of 15-112 animations framework #
 ###############################################
 
-#taken from http://www.cs.cmu.edu/~112/notes/notes-graphics.html
+
+# taken from http://www.cs.cmu.edu/~112/notes/notes-graphics.html
 def rgbString(rgb):
     red, green, blue = rgb
     return "#%02x%02x%02x" % (red, green, blue)
+
 
 def makeLight(rgb):
     red, green, blue = rgb
@@ -31,25 +32,36 @@ def makeLight(rgb):
     red = red + redWhiteDistance
     green = 255 - greenWhiteDistance
     blue = 255 - blueWhiteDistance
-    return (red, green, blue)
+    return red, green, blue
+
+
+def averageColors(rgb1, rgb2):
+    r1, g1, b1 = rgb1
+    r2, g2, b2 = rgb2
+    r = (r1 + r2) // 2
+    g = (g1 + g2) // 2
+    b = (b1 + b2) // 2
+    return r, g, b
+
 
 class UserPlayer(Player):
 
-    intToRGB = {-1: (169, 169, 169), # gray
-                0: (255, 255, 255), # white
-                1: (0, 0, 255), # blue
-                2: (255, 0, 0), # red
-                3: (0, 255, 0), # green
-                4: (255, 255, 0), # yellow
-                5: (255, 20, 147), # pink
-                6: (160, 32, 240), # purple
-                7: (32, 21, 11) # brown
+    intToRGB = {-1: (169, 169, 169),  # gray
+                0: (255, 255, 255),  # white
+                1: (0, 0, 255),  # blue
+                2: (255, 0, 0),  # red
+                3: (0, 255, 0),  # green
+                4: (255, 255, 0),  # yellow
+                5: (255, 20, 147),  # pink
+                6: (160, 32, 240),  # purple
+                7: (32, 21, 11)  # brown
                 }
 
     def __init__(self, upKey="Up", downKey="Down", leftKey="Left",
                        rightKey="Right", width=700, height=700):
         self.board = [[(0, 0)] * WINDOW_SIZE for _ in range(WINDOW_SIZE)]
         self.direction = Directions.UP
+        self.heads = []
         self.nextDirection = Directions.NULL
         self.width = width
         self.height = height
@@ -70,10 +82,10 @@ class UserPlayer(Player):
         self.canvas = canvas
         self.root = root
 
-        threading.Thread(target = self.run).start()
+        threading.Thread(target=self.run).start()
 
     def setState(self, state):
-        self.board, self.direction = state
+        self.board, self.direction, self.heads = state
         self.redrawAllWrapper(self.canvas)
 
     def getMove(self):
@@ -93,6 +105,9 @@ class UserPlayer(Player):
                 if (tailInt > 0):
                     rgb = self.intToRGB[tailInt]
                     rgb = makeLight(rgb)
+                    if (playerInt > 0):
+                        playerRGB = self.intToRGB[playerInt]
+                        rgb = averageColors(rgb, playerRGB)
                 else:
                     rgb = self.intToRGB[playerInt]
                 cellLeft = col * self.cellWidth
@@ -101,11 +116,14 @@ class UserPlayer(Player):
                 cellBot = cellTop + self.cellHeight
                 canvas.create_rectangle(cellLeft, cellTop, cellRight, cellBot,
                     fill= rgbString(rgb), width=0)
-        xCenter = self.width / 2
-        yCenter = self.height / 2
-        radius = 3
-        canvas.create_oval(xCenter - radius, yCenter - radius,
-                           xCenter + radius, yCenter + radius, fill="black")
+
+        headRadius = 3
+        for head in self.heads:
+            headRow, headCol = head
+            cellX = headCol * self.cellWidth + self.cellWidth / 2
+            cellY = headRow * self.cellHeight + self.cellHeight / 2
+            canvas.create_oval(cellX - headRadius, cellY - headRadius,
+                               cellX + headRadius, cellY + headRadius, fill="black")
 
     def mousePressedWrapper(self, event, canvas):
         self.mousePressed(event)
@@ -116,7 +134,6 @@ class UserPlayer(Player):
 
     def keyPressedWrapper(self, event, canvas):
         self.keyPressed(event)
-        self.redrawAllWrapper(canvas)
 
     def keyPressed(self, event):
         if event.keysym in self.keyToDirection:
@@ -133,9 +150,10 @@ def randomBoard():
               for _ in range(WINDOW_SIZE)]
     return board
 
+
 if __name__ == "__main__":
     player = UserPlayer(upKey='w', downKey='s', leftKey='a', rightKey='d')
-    while(True):
+    while True:
         board = randomBoard()
         player.setState((board, Directions.NULL))
         print(player.getMove())

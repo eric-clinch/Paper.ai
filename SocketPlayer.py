@@ -45,8 +45,8 @@ class SocketPlayer(Player):
                 return
 
     def setState(self, s):
-        board, _ = s
-        str = repr(board) + '\n'
+        board, _, heads = s
+        str = repr((board, heads)) + '\n'
         str = str.encode()
         self.client.send(str)
 

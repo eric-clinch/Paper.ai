@@ -31,6 +31,15 @@ def makeLight(rgb):
     return red, green, blue
 
 
+def averageColors(rgb1, rgb2):
+    r1, g1, b1 = rgb1
+    r2, g2, b2 = rgb2
+    r = (r1 + r2) // 2
+    g = (g1 + g2) // 2
+    b = (b1 + b2) // 2
+    return r, g, b
+
+
 def getServerInfo(data):
     data.host = input("what is the host address? ")
     data.port = int(input("what is the host port? "))
@@ -67,12 +76,13 @@ def handleServer(data):
             messages = msg.split("\n")  # we only care about the last message
             stateStr = messages[-2]  # get the last completed state
             msg = messages[-1]
-            data.board = eval(stateStr)
+            data.board, data.heads = eval(stateStr)
 
 def init(data):
     initDicts(data)
     data.board = [[(0, 0)] * WINDOW_SIZE for _ in range(WINDOW_SIZE)]
     data.direction = Directions.UP
+    data.heads = []
     data.nextDirection = Directions.NULL
     data.cellWidth = data.width / WINDOW_SIZE
     data.cellHeight = data.height / WINDOW_SIZE
@@ -103,6 +113,9 @@ def redrawAll(canvas, data):
             if (tailInt > 0):
                 rgb = data.intToRGB[tailInt]
                 rgb = makeLight(rgb)
+                if (playerInt > 0):
+                    playerRGB = data.intToRGB[playerInt]
+                    rgb = averageColors(rgb, playerRGB)
             else:
                 rgb = data.intToRGB[playerInt]
             cellLeft = col * data.cellWidth
@@ -112,11 +125,13 @@ def redrawAll(canvas, data):
             canvas.create_rectangle(cellLeft, cellTop, cellRight, cellBot,
                                     fill=rgbString(rgb), width=0)
 
-    xCenter = data.width / 2
-    yCenter = data.height / 2
-    radius = 3
-    canvas.create_oval(xCenter - radius, yCenter - radius,
-                       xCenter + radius, yCenter + radius, fill="black")
+    headRadius = 3
+    for head in data.heads:
+        headRow, headCol = head
+        cellX = headCol * data.cellWidth + data.cellWidth / 2
+        cellY = headRow * data.cellHeight + data.cellHeight / 2
+        canvas.create_oval(cellX - headRadius, cellY - headRadius,
+                           cellX + headRadius, cellY + headRadius, fill="black")
 
 def timerFired(data):
     pass
@@ -139,7 +154,6 @@ def run(width=300, height=300):
 
     def keyPressedWrapper(event, canvas, data):
         keyPressed(event, data)
-        redrawAllWrapper(canvas, data)
 
     def timerFiredWrapper(canvas, data):
         timerFired(data)
@@ -151,7 +165,7 @@ def run(width=300, height=300):
     data = Struct()
     data.width = width
     data.height = height
-    data.timerDelay = 100 # milliseconds
+    data.timerDelay = 100  # milliseconds
     root = Tk()
     init(data)
     # create the root and the canvas
