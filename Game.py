@@ -184,6 +184,7 @@ class Game(object):
             player.c += dc
             if not inBounds(player.r, player.c, self.board):
                 deathList.add(player)
+        livePlayers = list(filter(lambda p: (not p.isDead), self.players))
         for player in livePlayers:
             (territoryOwner, tailOwner) = self.board[player.r][player.c]
             if (tailOwner != 0):
