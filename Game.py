@@ -192,7 +192,7 @@ class Game(object):
 
         livePlayers = list(filter(lambda p: (not p.isDead), self.players))
 
-        heads = list(map(lambda p: (p.r, p.c), self.players))
+        heads = list(map(lambda p: (p.r, p.c), livePlayers))
         for player in livePlayers:
             player.setState(self.board, heads)
         for player in livePlayers:
