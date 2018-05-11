@@ -64,11 +64,25 @@ class Player(object):
 
         return window
 
+    def getWindowHeads(self, heads, board):
+        windowHeads = []
+
+        leftC = self.c - (WINDOW_SIZE // 2)
+        topR = self.r - (WINDOW_SIZE // 2)
+
+        for (r,c) in heads:
+            windowR = r - topR
+            windowC = c - leftC
+            if (inBounds(r,c,board)):
+                windowHeads.apppend((windowR, windowC))
+
+        return windowHeads
+
     def setState(self, board, heads):
         if not self.isDead:
             self.interface.setState((self.getWindow(board),
                                      self.direction,
-                                     heads))
+                                     self.getWindowHeads(heads, board)))
         else:
             return None
 
