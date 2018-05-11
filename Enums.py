@@ -7,4 +7,5 @@ class Directions(Enum):
     DOWN = 2
     LEFT = 3
     RIGHT = 4
-    DIRECTIONS = [UP, DOWN, LEFT, RIGHT]
+
+DIRECTIONS = [Directions.UP, Directions.DOWN, Directions.LEFT, Directions.RIGHT]

@@ -84,7 +84,7 @@ class UserPlayer(Player):
         keyToDirection = {"Up": Directions.UP, "Down": Directions.DOWN,
                           "Left": Directions.LEFT, "Right": Directions.RIGHT}
         if event.keysym in keyToDirection:
-            self.nextDirection = keyToDirection[event.keysym]        
+            self.nextDirection = keyToDirection[event.keysym]
 
     def run(self):
         try:
@@ -93,7 +93,7 @@ class UserPlayer(Player):
             pass
 
 def randomBoard():
-    board = [[(random.randint(0, 2), random.randint(0, 2)) for _ in range(WINDOW_SIZE)] 
+    board = [[(random.randint(0, 2), random.randint(0, 2)) for _ in range(WINDOW_SIZE)]
               for _ in range(WINDOW_SIZE)]
     return board
 
