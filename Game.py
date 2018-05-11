@@ -89,7 +89,7 @@ class Game(object):
         # how far from the center of the start blob the blob extends
         self.startBlobExtent = 1
         self.players = []
-        self.timerDelay = 100
+        self.timerDelay = 50
         self.running = True
         for player in players:
             self.addPlayer(player)
@@ -117,32 +117,30 @@ class Game(object):
                 if (territoryOwner == player.index): territoryOwner = 0
                 self.board[r][c] = (territoryOwner, tailOwner)
 
-    def tryFill(self, r, c, fullSet, deadSet, player):
+    def tryFill(self, r, c, fullSet, player):
         result = set([(r,c)])
-        for (dRow, dCol) in [(0,1), (0,-1), (1,0), (-1,0)]:
-            newR = r + dRow
-            newC = c + dCol
-            if inBounds(newR, newC, self.board):
-                if ((newR, newC) in fullSet):
-                    fullSet.remove((newR,newC))
+        cellStack = []
+        cellStack.append((r, c))
+        isValid = True
 
-                    temp = self.tryFill(newR, newC, fullSet, deadSet, player)
-                    if temp != None:
-                        result.update(temp)
-                    else:
-                        deadSet.add((r,c))
-                        return None
-                elif ((newR, newC) in deadSet):
-                    return None
-            else:
-                deadSet.add((r,c))
-                return None
+        while(len(cellStack) > 0):
+            r, c = cellStack.pop()
 
-        return result
+            for (dRow, dCol) in [(0,1), (0,-1), (1,0), (-1,0)]:
+                newR = r + dRow
+                newC = c + dCol
+                if inBounds(newR, newC, self.board):
+                    if ((newR, newC) in fullSet):
+                        fullSet.remove((newR,newC))
+                        cellStack.append((newR, newC))
+                        result.add((newR, newC))
+                else:
+                    isValid = False
+
+        return result if isValid else None
 
     def collectTerritory(self, player):
         fullSet = set()
-        deadSet = set()
 
         #turn all tails into solid territory
         for r in range(len(self.board)):
@@ -160,7 +158,7 @@ class Game(object):
         # collect space inside of the solid territory
         while (len(fullSet) > 0):
             (startR, startC) = fullSet.pop()
-            fillSet = self.tryFill(startR, startC, fullSet, deadSet, player)
+            fillSet = self.tryFill(startR, startC, fullSet, player)
             if fillSet == None: continue
 
             for (r, c) in fillSet:
