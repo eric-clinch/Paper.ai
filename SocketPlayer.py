@@ -10,6 +10,17 @@ def charToDirection(c):
         return DIRECTIONS[c]
     return DIRECTIONS.NULL
 
+def getStateStr(board, heads):
+    coordinateStrs = []
+    for row in board:
+        rowStrs = list(map(lambda c: "%d,%d" % (c[0],c[1]), row))
+        coordinateStrs += rowStrs
+    coordinateStr = '.'.join(coordinateStrs)
+
+    headsStrs = list(map(lambda c: "%d,%d" % (c[0],c[1]), heads))
+    headsStr = '.'.join(headsStrs)
+    return coordinateStr + '/' + headsStr
+
 class SocketPlayer(Player):
 
     def __init__(self, port=50000):
@@ -46,7 +57,7 @@ class SocketPlayer(Player):
 
     def setState(self, s):
         board, _, heads = s
-        str = repr((board, heads)) + '\n'
+        str = getStateStr(board, heads) + '\n'
         str = str.encode()
         self.client.send(str)
 

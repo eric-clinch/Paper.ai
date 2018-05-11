@@ -44,6 +44,32 @@ def getServerInfo(data):
     data.host = input("what is the host address? ")
     data.port = int(input("what is the host port? "))
 
+def parseState(stateStr):
+    coordinatesStr, headsStr = stateStr.split('/')
+
+    coordinatesStrs = coordinatesStr.split('.')
+    coordinates = list(map(lambda s: s.split(','), coordinatesStrs))
+    coordinates = list(map(lambda c: (int(c[0]), int(c[1])), coordinates))
+    board = [coordinates[i : i + WINDOW_SIZE] for i in range(0, WINDOW_SIZE * WINDOW_SIZE, WINDOW_SIZE)]
+
+    headsStrs = headsStr.split('.')
+    heads = list(map(lambda s: s.split(','), headsStrs))
+    heads = list(map(lambda c: (int(c[0]), int(c[1])), heads))
+
+    return board, heads
+
+def handleServer(data):
+    data.server.setblocking(1)
+    msg = ""
+    while True:
+        msg += data.server.recv(100).decode("UTF-8")
+        if "\n" in msg:
+            messages = msg.split("\n")  # we only care about the last message
+            stateStr = messages[-2]  # get the last completed state
+            msg = messages[-1]
+            data.board, data.heads = parseState(stateStr)
+
+
 def initDicts(data):
     data.intToRGB = {-1: (169, 169, 169),  # gray
                 0: (255, 255, 255),  # white
@@ -63,21 +89,6 @@ def initDicts(data):
         data.keyToDirectionChar[key] = str(directionIndex)
 
 
-def parseState(stateStr):
-    pass
-
-
-def handleServer(data):
-    data.server.setblocking(1)
-    msg = ""
-    while True:
-        msg += data.server.recv(100).decode("UTF-8")
-        if "\n" in msg:
-            messages = msg.split("\n")  # we only care about the last message
-            stateStr = messages[-2]  # get the last completed state
-            msg = messages[-1]
-            data.board, data.heads = eval(stateStr)
-
 def init(data):
     initDicts(data)
     data.board = [[(0, 0)] * WINDOW_SIZE for _ in range(WINDOW_SIZE)]
@@ -87,7 +98,6 @@ def init(data):
     data.cellWidth = data.width / WINDOW_SIZE
     data.cellHeight = data.height / WINDOW_SIZE
 
-    getServerInfo(data)
     data.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     print("attempting to connect to server at address", data.host,
           "on port", data.port)
@@ -165,7 +175,8 @@ def run(width=300, height=300):
     data = Struct()
     data.width = width
     data.height = height
-    data.timerDelay = 100  # milliseconds
+    data.timerDelay = 50  # milliseconds
+    getServerInfo(data)
     root = Tk()
     init(data)
     # create the root and the canvas
