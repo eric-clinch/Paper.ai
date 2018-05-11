@@ -5,27 +5,27 @@ from Enums import Directions, DIRECTIONS
 WINDOW_SIZE = 51
 
 # Helper utilities
-def inBounds(x,y,board):
-    return ((x > 0) and (x < len(board)) and (y > 0) and (y < len(board)))
+def inBounds(r,c,board):
+    return ((r > 0) and (r < len(board)) and (c > 0) and (c < len(board)))
 
 # Player class for game
 class Player(object):
     def getWindowCoords(self, extent):
-        leftX = self.x - extent
-        topY = self.y - extent
+        leftC = self.c - extent
+        topR = self.r - extent
         diameter = (extent * 2) + 1
 
         out = []
-        for x in range(diameter):
-            for y in range(diameter):
-                out += [(x + leftX, y + topY)]
+        for r in range(diameter):
+            for c in range(diameter):
+                out += [(r + topR, c + leftC)]
 
         return out
 
     def __init__(self, index, interface, board, startBlobExtent):
         self.interface = interface
-        self.x = None
-        self.y = None
+        self.c = None
+        self.r = None
         self.index = index
         self.direction = random.choice(DIRECTIONS)
         self.isDead = False
@@ -33,30 +33,30 @@ class Player(object):
         maxCoord = len(board) - 1 - startBlobExtent
 
         # set x in available x position
-        while (self.x == None and self.y == None):
-            self.x = random.randint(startBlobExtent, maxCoord)
-            self.y = random.randint(startBlobExtent, maxCoord)
+        while (self.r == None and self.c == None):
+            self.r = random.randint(startBlobExtent, maxCoord)
+            self.c = random.randint(startBlobExtent, maxCoord)
 
-            for (x, y) in self.getWindowCoords(startBlobExtent):
-                if (board[x][y] != (0, 0)):
-                    self.x = None
-                    self.y = None
+            for (r, c) in self.getWindowCoords(startBlobExtent):
+                if (board[r][c] != (0, 0)):
+                    self.r = None
+                    self.c = None
 
-        for (x, y) in self.getWindowCoords(startBlobExtent):
-            board[x][y] = (self.index, False)
+        for (r, c) in self.getWindowCoords(startBlobExtent):
+            board[r][c] = (self.index, False)
 
     def getWindow(self, board):
         window = [[(-1, False)] * WINDOW_SIZE for i in range(WINDOW_SIZE)]
         boardCoords = self.getWindowCoords(WINDOW_SIZE // 2)
 
-        leftX = self.x - (WINDOW_SIZE // 2)
-        topY = self.y - (WINDOW_SIZE // 2)
+        leftC = self.c - (WINDOW_SIZE // 2)
+        topR = self.r - (WINDOW_SIZE // 2)
 
-        for (x,y) in boardCoords:
-            windowX = x - leftX
-            windowY = y - topY
-            if (inBounds(x,y,board)):
-                window[windowX][windowY] = board[x][y]
+        for (r,c) in boardCoords:
+            windowR = r - topR
+            windowC = c - leftC
+            if (inBounds(r,c,board)):
+                window[windowR][windowC] = board[r][c]
 
         return window
 
@@ -89,7 +89,7 @@ class Game(object):
         # how far from the center of the start blob the blob extends
         self.startBlobExtent = 1
         self.players = []
-        self.timerDelay = 500
+        self.timerDelay = 50
         self.running = True
         for player in players:
             self.addPlayer(player)
@@ -110,46 +110,56 @@ class Game(object):
 
     def killPlayer(self, player):
         player.isDead = True
-        for x in range(len(self.board)):
-            for y in range(len(self.board)):
-                (territoryOwner, tailOwner) = self.board[x][y]
+        for r in range(len(self.board)):
+            for c in range(len(self.board)):
+                (territoryOwner, tailOwner) = self.board[r][c]
                 if (tailOwner == player.index): newTailOwner = 0
                 if (territoryOwner == player.index): newTerritoryOwner = 0
-                self.board[x][y] = (newTerritoryOwner, newTailOwner)
+                self.board[r][c] = (newTerritoryOwner, newTailOwner)
 
+    def tryFill(self, r, c, emptySet):
+        result = set([(r,c)])
+        for (dRow, dCol) in [(0,1), (0,-1), (1,0), (-1,0)]:
+            newR = r + dRow
+            newC = c + dCol
+            if inBounds(newR, newC, self.board):
+                if ((newR, newC) in emptySet):
+                    emptySet.remove((newR, newC))
+                temp = self.tryFill(newR, newC, emptySet)
+                if temp != None:
+                    result = result.union(temp)
+                else:
+                    return None
+            else:
+                return None
+        return result
 
     def collectTerritory(self, player):
+        emptySet = set()
+
         #turn all tails into solid territory
-        for y in range(len(self.board)):
-            for x in range(len(self.board)):
-                (territoryOwner, tailOwner) = self.board[x][y]
+        for r in range(len(self.board)):
+            for c in range(len(self.board)):
+                (territoryOwner, tailOwner) = self.board[r][c]
                 if (tailOwner == player.index):
-                    self.board[x][y] = (player.index, 0)
+                    self.board[r][c] = (player.index, 0)
+                elif (territoryOwner == 0):
+                    emptySet.add((r,c))
 
         # collect space inside of the solid territory
-        for y in range(len(self.board)):
-            prevTail = False
-            collecting = False
-            horizontalLine = False
-            for x in range(len(self.board)):
-                (territoryOwner, tailOwner) = self.board[x][y]
-                if (territoryOwner == player.index):
-                    collecting = False
-                    if prevTail:
-                        horizontalLine = True
-                    prevTail = True
-                else:
-                    if not horizontalLine and prevTail:
-                        collecting = True
-                    prevTail = False
-                    horizontalLine = False
+        while (len(emptySet) > 0):
+            (startR, startC) = emptySet.pop()
+            fillSet = self.tryFill(startR, startC, emptySet)
+            if fillSet == None: continue
 
-                    if collecting:
-                        self.board[x][y] = (player.index, 0)
+            print(fillSet)
+            for (r, c) in fillSet:
+                (_, tailOwner) = self.board[r][c]
+                self.board[r][c] = (player.index, tailOwner)
 
     def tick(self):
-        dMap = {Directions.LEFT: (-1, 0), Directions.RIGHT: (1, 0),
-                Directions.UP: (0, 1), Directions.DOWN: (0, -1)}
+        dMap = {Directions.LEFT: (0, -1), Directions.RIGHT: (0, 1),
+                Directions.UP: (-1, 0), Directions.DOWN: (1, 0)}
         deathList = set()
 
         livePlayers = list(filter(lambda p: (not p.isDead), self.players))
@@ -159,19 +169,18 @@ class Game(object):
         for player in livePlayers:
             player.getMove()
         for player in livePlayers:
-            print(player.direction)
-            (dx, dy) = dMap[player.direction]
-            player.x += dx
-            player.y += dy
-            if not inBounds(player.x, player.y, self.board):
+            (dr, dc) = dMap[player.direction]
+            player.r += dr
+            player.c += dc
+            if not inBounds(player.r, player.c, self.board):
                 deathList.add(player)
         for player in livePlayers:
-            (territoryOwner, tailOwner) = self.board[player.x][player.y]
+            (territoryOwner, tailOwner) = self.board[player.r][player.c]
             if (tailOwner != 0):
                 deathList.add(self.playerFromIndex(tailOwner))
             for other in livePlayers:
                 if (player.index != other.index
-                    and player.x == other.x and player.y == other.y):
+                    and player.r == other.r and player.c == other.c):
                     deathList.add(player)
                     deathList.add(player)
         for player in deathList:
@@ -180,9 +189,9 @@ class Game(object):
         livePlayers = list(filter(lambda p: (not p.isDead), self.players))
 
         for player in livePlayers:
-            (territoryOwner, tailOwner) = self.board[player.x][player.y]
+            (territoryOwner, tailOwner) = self.board[player.r][player.c]
             if (territoryOwner != player.index):
-                self.board[player.x][player.y] = (territoryOwner, player.index)
+                self.board[player.r][player.c] = (territoryOwner, player.index)
             else:
                 self.collectTerritory(player)
 
