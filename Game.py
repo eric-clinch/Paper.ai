@@ -89,7 +89,7 @@ class Game(object):
         # how far from the center of the start blob the blob extends
         self.startBlobExtent = 1
         self.players = []
-        self.timerDelay = 50
+        self.timerDelay = 100
         self.running = True
         for player in players:
             self.addPlayer(player)
@@ -105,37 +105,44 @@ class Game(object):
                 return False
         return True
 
-    def playerFromIndex(self, player):
-        self.players[tailOwner - 1]
+    def playerFromIndex(self, playerIndex):
+        return self.players[playerIndex - 1]
 
     def killPlayer(self, player):
         player.isDead = True
         for r in range(len(self.board)):
             for c in range(len(self.board)):
                 (territoryOwner, tailOwner) = self.board[r][c]
-                if (tailOwner == player.index): newTailOwner = 0
-                if (territoryOwner == player.index): newTerritoryOwner = 0
-                self.board[r][c] = (newTerritoryOwner, newTailOwner)
+                if (tailOwner == player.index): tailOwner = 0
+                if (territoryOwner == player.index): territoryOwner = 0
+                self.board[r][c] = (territoryOwner, tailOwner)
 
-    def tryFill(self, r, c, emptySet):
+    def tryFill(self, r, c, fullSet, deadSet, player):
         result = set([(r,c)])
         for (dRow, dCol) in [(0,1), (0,-1), (1,0), (-1,0)]:
             newR = r + dRow
             newC = c + dCol
             if inBounds(newR, newC, self.board):
-                if ((newR, newC) in emptySet):
-                    emptySet.remove((newR, newC))
-                temp = self.tryFill(newR, newC, emptySet)
-                if temp != None:
-                    result = result.union(temp)
-                else:
+                if ((newR, newC) in fullSet):
+                    fullSet.remove((newR,newC))
+
+                    temp = self.tryFill(newR, newC, fullSet, deadSet, player)
+                    if temp != None:
+                        result.update(temp)
+                    else:
+                        deadSet.add((r,c))
+                        return None
+                elif ((newR, newC) in deadSet):
                     return None
             else:
+                deadSet.add((r,c))
                 return None
+
         return result
 
     def collectTerritory(self, player):
-        emptySet = set()
+        fullSet = set()
+        deadSet = set()
 
         #turn all tails into solid territory
         for r in range(len(self.board)):
@@ -143,16 +150,19 @@ class Game(object):
                 (territoryOwner, tailOwner) = self.board[r][c]
                 if (tailOwner == player.index):
                     self.board[r][c] = (player.index, 0)
-                elif (territoryOwner == 0):
-                    emptySet.add((r,c))
+
+        for r in range(len(self.board)):
+            for c in range(len(self.board)):
+                (territoryOwner, tailOwner) = self.board[r][c]
+                if (territoryOwner != player.index):
+                    fullSet.add((r,c))
 
         # collect space inside of the solid territory
-        while (len(emptySet) > 0):
-            (startR, startC) = emptySet.pop()
-            fillSet = self.tryFill(startR, startC, emptySet)
+        while (len(fullSet) > 0):
+            (startR, startC) = fullSet.pop()
+            fillSet = self.tryFill(startR, startC, fullSet, deadSet, player)
             if fillSet == None: continue
 
-            print(fillSet)
             for (r, c) in fillSet:
                 (_, tailOwner) = self.board[r][c]
                 self.board[r][c] = (player.index, tailOwner)
