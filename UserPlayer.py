@@ -30,8 +30,8 @@ def makeLight(rgb):
     blueWhiteDistance //= 2
 
     red = red + redWhiteDistance
-    green = 255 - greenWhiteDistance
-    blue = 255 - blueWhiteDistance
+    green = green + greenWhiteDistance
+    blue = blue + blueWhiteDistance
     return red, green, blue
 
 
@@ -48,12 +48,12 @@ class UserPlayer(Player):
 
     intToRGB = {-1: (169, 169, 169),  # gray
                 0: (255, 255, 255),  # white
-                1: (0, 0, 255),  # blue
+                6: (0, 0, 255),  # blue
                 2: (255, 0, 0),  # red
                 3: (0, 255, 0),  # green
                 4: (255, 255, 0),  # yellow
                 5: (255, 20, 147),  # pink
-                6: (160, 32, 240),  # purple
+                1: (160, 32, 240),  # purple
                 7: (32, 21, 11)  # brown
                 }
 
