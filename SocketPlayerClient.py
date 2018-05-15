@@ -67,7 +67,10 @@ def handleServer(data):
             messages = msg.split("\n")  # we only care about the last message
             stateStr = messages[-2]  # get the last completed state
             msg = messages[-1]
-            data.board, data.heads = parseState(stateStr)
+            board, heads = parseState(stateStr)
+            data.stateMutex.acquire()
+            data.board, data.heads = board, heads
+            data.stateMutex.release()
 
 
 def initDicts(data):
@@ -103,6 +106,7 @@ def init(data):
           "on port", data.port)
     data.server.connect((data.host, data.port))
     print("connected to server")
+    data.stateMutex = threading.Lock()
     threading.Thread(target=handleServer, args=(data,)).start()
 
 
@@ -117,6 +121,7 @@ def keyPressed(event, data):
 
 
 def redrawAll(canvas, data):
+    data.stateMutex.acquire()
     for row in range(WINDOW_SIZE):
         for col in range(WINDOW_SIZE):
             playerInt, tailInt = data.board[row][col]
@@ -142,6 +147,7 @@ def redrawAll(canvas, data):
         cellY = headRow * data.cellHeight + data.cellHeight / 2
         canvas.create_oval(cellX - headRadius, cellY - headRadius,
                            cellX + headRadius, cellY + headRadius, fill="black")
+    data.stateMutex.release()
 
 def timerFired(data):
     pass
@@ -190,8 +196,6 @@ def run(width=300, height=300):
     timerFiredWrapper(canvas, data)
     # and launch the app
     root.mainloop()  # blocks until window is closed
-    print("bye!")
-
 
 if __name__ == "__main__":
     run(700, 700)
