@@ -26,8 +26,8 @@ def makeLight(rgb):
     blueWhiteDistance //= 2
 
     red = red + redWhiteDistance
-    green = 255 - greenWhiteDistance
-    blue = 255 - blueWhiteDistance
+    green = green + greenWhiteDistance
+    blue = blue + blueWhiteDistance
     return red, green, blue
 
 
