@@ -131,6 +131,7 @@ public class PaperIO {
 	static int[][] board = new int[boardSize][boardSize];
 	static int[][] tails = new int[boardSize][boardSize];
 	static RGB[][] boardRGBs = new RGB[boardSize][boardSize];
+	static boolean[][] prevHeadLocations = new boolean[boardSize][boardSize];
 	static ArrayList<Head> heads = new ArrayList<Head>();
 	static JFrame frame;
 	static BufferStrategy strategy;
@@ -191,7 +192,7 @@ public class PaperIO {
 						rgb = intToRGB.get(playerInt);
 					}
 					
-					if (!rgb.equals(boardRGBs[row][col])) {
+					if (!rgb.equals(boardRGBs[row][col]) || prevHeadLocations[row][col]) {
 						boardRGBs[row][col] = rgb;
 						
 						int yTop = row * cellSize;
@@ -199,6 +200,7 @@ public class PaperIO {
 						Color color = rgb.getColor();
 						graphics.setColor(color);
 						graphics.fillRect(xLeft, yTop, cellSize, cellSize);
+						prevHeadLocations[row][col] = false;
 					}
 				}
 			}
@@ -206,6 +208,8 @@ public class PaperIO {
 			int radius = 5;
 			graphics.setColor(black);
 			for (Head h : heads) {
+				if (h.row < 0 || h.row >= boardSize || h.col < 0 || h.col >= boardSize) continue;
+				prevHeadLocations[h.row][h.col] = true;
 				int dotY = h.row * cellSize + cellSize / 2 - radius / 2;
 				int dotX = h.col * cellSize + cellSize / 2 - radius / 2;
 				graphics.fillOval(dotX, dotY, 5, 5);
