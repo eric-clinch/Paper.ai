@@ -36,6 +36,8 @@ class Player(object):
 
         maxCoord = len(board) - 1 - startBlobExtent
 
+        print(startBlobExtent, maxCoord)
+
         # set x in available x position
         while (self.r == None and self.c == None):
             self.r = random.randint(startBlobExtent, maxCoord)
@@ -104,13 +106,14 @@ class Player(object):
 
 # Game logic
 class Game(object):
-    def __init__(self, boardSize, players):
+    def __init__(self, boardSize, players, respawn = True):
         self.board = [[(0, 0)] * boardSize for i in range(boardSize)]
         # how far from the center of the start blob the blob extends
         self.startBlobExtent = 1
         self.players = []
         self.timerDelay = 50
         self.running = True
+        self.respawn = respawn
         for player in players:
             self.addPlayer(player)
 
@@ -185,6 +188,12 @@ class Game(object):
                 (_, tailOwner) = self.board[r][c]
                 self.board[r][c] = (player.index, tailOwner)
 
+    def respawnPlayers(self):
+        for player in self.players:
+            if player.isDead:
+                player.__init__(player.index, player.interface,
+                                self.board, self.startBlobExtent)
+
     def tick(self):
         dMap = {Directions.LEFT: (0, -1), Directions.RIGHT: (0, 1),
                 Directions.UP: (-1, 0), Directions.DOWN: (1, 0)}
@@ -231,6 +240,9 @@ class Game(object):
                 if not player.wasHomeLastTick:
                     self.collectTerritory(player)
                 player.wasHomeLastTick = True
+
+        if self.respawn:
+            self.respawnPlayers()
 
         if self.allPlayersDead():
             self.running = False
