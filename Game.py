@@ -31,10 +31,9 @@ class Player(object):
         self.r = None
         self.index = index
         self.direction = random.choice(DIRECTIONS)
-        self.isDead = False
         self.wasHomeLastTick = False
 
-        maxCoord = len(board) - 1 - startBlobExtent
+        maxCoord = len(board) - 2 - startBlobExtent
 
         # set x in available x position
         while (self.r == None and self.c == None):
@@ -48,6 +47,8 @@ class Player(object):
 
         for (r, c) in self.getWindowCoords(startBlobExtent):
             board[r][c] = (self.index, False)
+
+        self.isDead = False
 
     def getWindow(self, board):
         window = [[(-1, False)] * WINDOW_SIZE for i in range(WINDOW_SIZE)]
@@ -84,7 +85,7 @@ class Player(object):
                                      self.direction,
                                      self.getWindowHeads(heads, board)))
         else:
-            return None
+            self.interface.setState(None)
 
     def getMove(self):
         opposites = {Directions.LEFT : Directions.RIGHT,
