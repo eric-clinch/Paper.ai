@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 import javax.swing.JFrame;
@@ -136,6 +137,7 @@ public class PaperIO {
 	static boolean inGame = false;
 	static String host = "";
 	static String portStr = null;
+	static Semaphore boardSemaphore = new Semaphore(1);
 	
 	public static void initHashMap() {
 		intToRGB = new HashMap<Integer, RGB>();
@@ -160,6 +162,12 @@ public class PaperIO {
 		}
 		
 		public void drawBoard() {
+			try {
+				boardSemaphore.acquire();
+			} catch (InterruptedException e) {
+				System.out.println(e);
+				return;
+			}
 			for (int row = 0; row < boardSize; row++) {
 				for (int col = 0; col < boardSize; col++) {
 					int yTop = row * cellSize;
@@ -193,6 +201,7 @@ public class PaperIO {
 				int dotX = h.col * cellSize + cellSize / 2 - radius / 2;
 				graphics.fillOval(dotX, dotY, 5, 5);
 			}
+			boardSemaphore.release();
 		}
 		
 		public void run() {
@@ -203,6 +212,12 @@ public class PaperIO {
 	
 	private static class HandleServer implements Runnable {
 		private void parseState(String stateStr) {
+			try {
+				boardSemaphore.acquire();
+			} catch (InterruptedException e) {
+				System.out.println(e);
+				return;
+			}
 			String[] parts = stateStr.split("/");
 			String coordinatesStr = parts[0];
 			String headsStr = parts[1];
@@ -226,6 +241,7 @@ public class PaperIO {
 				int col = Integer.parseInt(headCoordinates[1]);
 				heads.add(new Head(row, col));
 			}
+			boardSemaphore.release();
 		}
 		
 		public void run() {
@@ -257,6 +273,6 @@ public class PaperIO {
 		
 	    ScheduledExecutorService service = Executors
 	                    .newSingleThreadScheduledExecutor();
-	    service.scheduleAtFixedRate(new DrawBoard(), 0, 25, TimeUnit.MILLISECONDS); // redraw every 100 milliseconds
+	    service.scheduleAtFixedRate(new DrawBoard(), 0, 50, TimeUnit.MILLISECONDS); // redraw every 100 milliseconds
 	}
 }
