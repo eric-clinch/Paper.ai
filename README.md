@@ -1,1 +1,1 @@
-"# Paper.ai"
+# Paper.ai

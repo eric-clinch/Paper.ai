@@ -48,7 +48,6 @@ class SocketPlayer(Player):
                     self.moveMutex.acquire()
                     self.move = newDirection
                     self.moveMutex.release()
-                    print("received move", self.move)
             except:
                 self.moveMutex.acquire()
                 self.move = Directions.NULL
