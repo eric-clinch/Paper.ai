@@ -36,8 +36,6 @@ class Player(object):
 
         maxCoord = len(board) - 1 - startBlobExtent
 
-        print(startBlobExtent, maxCoord)
-
         # set x in available x position
         while (self.r == None and self.c == None):
             self.r = random.randint(startBlobExtent, maxCoord)
