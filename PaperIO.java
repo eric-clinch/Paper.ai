@@ -56,6 +56,10 @@ public class PaperIO {
 			int avgB = (b + other.b) / 2;
 			return new RGB(avgR, avgG, avgB);
 		}
+		
+		public boolean equals(RGB other) {
+			return other != null && r == other.r && g == other.g && b == other.b;
+		}
 	}
 	
 	private static class Head {
@@ -102,6 +106,7 @@ public class PaperIO {
 		        			    inGame = true;
 		        			}
 		        			catch (Exception exception) {
+		        				System.out.println(exception);
 		        				host = "";
 		        				portStr = null;
 		        				inGame = false;
@@ -125,6 +130,7 @@ public class PaperIO {
 	static int windowSize = boardSize * cellSize;
 	static int[][] board = new int[boardSize][boardSize];
 	static int[][] tails = new int[boardSize][boardSize];
+	static RGB[][] boardRGBs = new RGB[boardSize][boardSize];
 	static ArrayList<Head> heads = new ArrayList<Head>();
 	static JFrame frame;
 	static BufferStrategy strategy;
@@ -157,7 +163,7 @@ public class PaperIO {
 			Font font = new Font("TimesRoman", Font.PLAIN, 30);
 			graphics.setFont(font);
 			graphics.clearRect(0, 0, windowSize, windowSize);
-			graphics.drawString("host IP: " + host, 100, 100);
+			graphics.drawString("host: " + host, 100, 100);
 			if (portStr != null) graphics.drawString("port: " + portStr, 100, 150);
 		}
 		
@@ -169,10 +175,7 @@ public class PaperIO {
 				return;
 			}
 			for (int row = 0; row < boardSize; row++) {
-				for (int col = 0; col < boardSize; col++) {
-					int yTop = row * cellSize;
-					int xLeft = col * cellSize;
-					
+				for (int col = 0; col < boardSize; col++) {					
 					int playerInt = board[row][col];
 					int tailInt = tails[row][col];
 					RGB rgb;
@@ -188,9 +191,15 @@ public class PaperIO {
 						rgb = intToRGB.get(playerInt);
 					}
 					
-					Color color = rgb.getColor();
-					graphics.setColor(color);
-					graphics.fillRect(xLeft, yTop, cellSize, cellSize);
+					if (!rgb.equals(boardRGBs[row][col])) {
+						boardRGBs[row][col] = rgb;
+						
+						int yTop = row * cellSize;
+						int xLeft = col * cellSize;
+						Color color = rgb.getColor();
+						graphics.setColor(color);
+						graphics.fillRect(xLeft, yTop, cellSize, cellSize);
+					}
 				}
 			}
 			
@@ -273,6 +282,6 @@ public class PaperIO {
 		
 	    ScheduledExecutorService service = Executors
 	                    .newSingleThreadScheduledExecutor();
-	    service.scheduleAtFixedRate(new DrawBoard(), 0, 50, TimeUnit.MILLISECONDS); // redraw every 100 milliseconds
+	    service.scheduleAtFixedRate(new DrawBoard(), 0, 50, TimeUnit.MILLISECONDS); // redraw every 50 milliseconds
 	}
 }
