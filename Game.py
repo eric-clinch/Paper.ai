@@ -34,8 +34,6 @@ class Player(object):
         self.wasHomeLastTick = False
 
         maxCoord = len(board) - 2 - startBlobExtent
-        placementCounter = 0
-        maxPlacement =
 
         # set x in available x position
         while (self.r == None and self.c == None):
