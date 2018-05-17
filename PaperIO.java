@@ -286,6 +286,6 @@ public class PaperIO {
 		
 	    ScheduledExecutorService service = Executors
 	                    .newSingleThreadScheduledExecutor();
-	    service.scheduleAtFixedRate(new DrawBoard(), 0, 50, TimeUnit.MILLISECONDS); // redraw every 50 milliseconds
+	    service.scheduleAtFixedRate(new DrawBoard(), 0, 25, TimeUnit.MILLISECONDS); // redraw every 50 milliseconds
 	}
 }
