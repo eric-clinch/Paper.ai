@@ -48,9 +48,9 @@ class UserPlayer(Player):
 
     intToRGB = {-1: (169, 169, 169),  # gray
                 0: (255, 255, 255),  # white
-                1: (0, 0, 255),  # blue
-                2: (255, 0, 0),  # red
-                3: (0, 255, 0),  # green
+                1: (25, 25, 255),  # blue
+                2: (255, 25, 25),  # red
+                3: (25, 255, 25),  # green
                 4: (255, 255, 0),  # yellow
                 5: (255, 20, 147),  # pink
                 6: (160, 32, 240),  # purple
@@ -85,7 +85,8 @@ class UserPlayer(Player):
         threading.Thread(target=self.run).start()
 
     def setState(self, state):
-        self.board, self.direction, self.heads = state
+        self.board, self.direction, self.heads, score = state
+        print(score)
         self.redrawAllWrapper(self.canvas)
 
     def getMove(self):

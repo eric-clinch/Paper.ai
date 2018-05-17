@@ -27,7 +27,8 @@ class DataPlayer(Player):
         self.dataGathered.append((self.state, move))
         return move
 
-    def save(self):
+    # save all the data when the player dies
+    def died(self):
         file = open(self.fileName, 'wb')
         pickle.dump(self.dataGathered, file)
         file.close()
