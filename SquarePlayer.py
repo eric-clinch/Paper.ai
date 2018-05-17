@@ -16,5 +16,8 @@ class SquarePlayer(Player):
         (board, direction, heads, score) = state
         self.direction = direction
 
+    def died(self):
+        pass
+
     def getMove(self):
         return SquarePlayer.nextDirections[self.direction]
