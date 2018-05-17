@@ -5,15 +5,16 @@ import pickle
 import copy
 
 class DataPlayer(Player):
+    def initFileName(self):
+        gamePlayerClass = self.gamePlayer.__class__.__name__
+        now = datetime.datetime.now()
+        currentTime = now.strftime("%Y-%m-%d %H-%M-%S")
+        self.fileName = "Data/%s_%s.pickle" % (gamePlayerClass, currentTime)
+
     def __init__(self, gamePlayer):
         assert(isinstance(gamePlayer, Player))
         self.gamePlayer = gamePlayer
-        gamePlayerClass = gamePlayer.__class__.__name__
-        now = datetime.datetime.now()
-        currentTime = now.strftime("%Y-%m-%d %H-%M")
-        print(currentTime)
-        self.fileName = "%s_%s.pickle" % (gamePlayerClass, currentTime)
-        print(self.fileName)
+        self.initFileName()
         self.dataGathered = []
         self.state = None
 
@@ -30,3 +31,7 @@ class DataPlayer(Player):
         file = open(self.fileName, 'wb')
         pickle.dump(self.dataGathered, file)
         file.close()
+
+        self.initFileName()
+        self.dataGathered = []
+        self.state = None
