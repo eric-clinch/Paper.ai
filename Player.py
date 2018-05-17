@@ -6,3 +6,6 @@ class Player(object):
 
     def getMove(self):
         return Moves.NULL
+
+    def died(self):
+        pass
