@@ -1,6 +1,7 @@
 from Enums import Directions
+from Player import Player
 
-class SquarePlayer(object):
+class SquarePlayer(Player):
     nextDirections = {
         Directions.DOWN: Directions.RIGHT,
         Directions.RIGHT: Directions.UP,
@@ -12,8 +13,11 @@ class SquarePlayer(object):
         self.direction = Directions.NULL
 
     def setState(self, state):
-        (board, direction, heads) = state
+        (board, direction, heads, score) = state
         self.direction = direction
+
+    def died(self):
+        pass
 
     def getMove(self):
         return SquarePlayer.nextDirections[self.direction]

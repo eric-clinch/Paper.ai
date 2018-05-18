@@ -50,6 +50,10 @@ class Player(object):
 
         self.isDead = False
 
+    def kill(self):
+        self.isDead = True
+        self.interface.died()
+
     def getWindow(self, board):
         window = [[(-1, False)] * WINDOW_SIZE for i in range(WINDOW_SIZE)]
         boardCoords = self.getWindowCoords(WINDOW_SIZE // 2)
@@ -79,11 +83,12 @@ class Player(object):
 
         return windowHeads
 
-    def setState(self, board, heads):
+    def setState(self, board, heads, score):
         if not self.isDead:
             self.interface.setState((self.getWindow(board),
                                      self.direction,
-                                     self.getWindowHeads(heads, board)))
+                                     self.getWindowHeads(heads, board), 
+                                     score))
         else:
             self.interface.setState(None)
 
@@ -131,7 +136,7 @@ class Game(object):
         return self.players[playerIndex - 1]
 
     def killPlayer(self, player):
-        player.isDead = True
+        player.kill()
         for r in range(len(self.board)):
             for c in range(len(self.board)):
                 (territoryOwner, tailOwner) = self.board[r][c]
@@ -193,6 +198,16 @@ class Game(object):
                 player.__init__(player.index, player.interface,
                                 self.board, self.startBlobExtent)
 
+    def getMapScores(self):
+        scores = dict()
+        for r in range(len(self.board)):
+            for c in range(len(self.board)):
+                (territoryOwner, tailOwner) = self.board[r][c]
+                if (territoryOwner != 0):
+                    player = self.playerFromIndex(territoryOwner)
+                    scores[player] = scores.get(player, 0) + 1
+        return scores
+
     def tick(self):
         dMap = {Directions.LEFT: (0, -1), Directions.RIGHT: (0, 1),
                 Directions.UP: (-1, 0), Directions.DOWN: (1, 0)}
@@ -201,8 +216,9 @@ class Game(object):
         livePlayers = list(filter(lambda p: (not p.isDead), self.players))
 
         heads = list(map(lambda p: (p.r, p.c), livePlayers))
+        mapScores = self.getMapScores()
         for player in livePlayers:
-            player.setState(self.board, heads)
+            player.setState(self.board, heads, mapScores.get(player, 0))
         for player in livePlayers:
             player.getMove()
         for player in livePlayers:
@@ -211,20 +227,20 @@ class Game(object):
             player.c += dc
             if not inBounds(player.r, player.c, self.board):
                 deathList.add(player)
-                player.isDead = True
+                player.kill()
         livePlayers = list(filter(lambda p: (not p.isDead), self.players))
         for player in livePlayers:
             (territoryOwner, tailOwner) = self.board[player.r][player.c]
             if (tailOwner != 0):
                 deathList.add(self.playerFromIndex(tailOwner))
-                self.playerFromIndex(tailOwner).isDead = True
+                self.playerFromIndex(tailOwner).kill()
             for other in livePlayers:
                 if (player.index != other.index
                     and player.r == other.r and player.c == other.c):
                     deathList.add(player)
                     deathList.add(other)
-                    player.isDead = True
-                    other.isDead = True
+                    player.kill()
+                    other.kill()
         for player in deathList:
             self.killPlayer(player)
 
