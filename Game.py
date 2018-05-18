@@ -51,8 +51,9 @@ class Player(object):
         self.isDead = False
 
     def kill(self):
+        if (not self.isDead):
+            self.interface.died()
         self.isDead = True
-        self.interface.died()
 
     def getWindow(self, board):
         window = [[(-1, False)] * WINDOW_SIZE for i in range(WINDOW_SIZE)]
