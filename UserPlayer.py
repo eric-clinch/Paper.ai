@@ -43,7 +43,6 @@ def averageColors(rgb1, rgb2):
     b = (b1 + b2) // 2
     return r, g, b
 
-
 class UserPlayer(Player):
 
     intToRGB = {-1: (169, 169, 169),  # gray
@@ -86,7 +85,6 @@ class UserPlayer(Player):
 
     def setState(self, state):
         self.board, self.direction, self.heads, score = state
-        print(score)
         self.redrawAllWrapper(self.canvas)
 
     def getMove(self):
@@ -150,12 +148,3 @@ def randomBoard():
     board = [[(random.randint(0, 2), random.randint(0, 2)) for _ in range(WINDOW_SIZE)]
               for _ in range(WINDOW_SIZE)]
     return board
-
-
-if __name__ == "__main__":
-    player = UserPlayer(upKey='w', downKey='s', leftKey='a', rightKey='d')
-    while True:
-        board = randomBoard()
-        player.setState((board, Directions.NULL))
-        print(player.getMove())
-        time.sleep(.1)

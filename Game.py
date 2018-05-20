@@ -46,7 +46,7 @@ class Player(object):
                     self.c = None
 
         for (r, c) in self.getWindowCoords(startBlobExtent):
-            board[r][c] = (self.index, False)
+            board[r][c] = (self.index, 0)
 
         self.isDead = False
 
@@ -56,7 +56,7 @@ class Player(object):
         self.isDead = True
 
     def getWindow(self, board):
-        window = [[(-1, False)] * WINDOW_SIZE for i in range(WINDOW_SIZE)]
+        window = [[(-1, 0)] * WINDOW_SIZE for i in range(WINDOW_SIZE)]
         boardCoords = self.getWindowCoords(WINDOW_SIZE // 2)
 
         leftC = self.c - (WINDOW_SIZE // 2)
