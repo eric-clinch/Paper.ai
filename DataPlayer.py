@@ -36,7 +36,6 @@ class DataPlayer(Player):
 
     # save all the data when the player dies
     def died(self):
-        print("%s died" % self.name)
         file = open(self.fileName, 'wb+')
         pickle.dump(self.dataGathered, file)
         file.close()

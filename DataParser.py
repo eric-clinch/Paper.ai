@@ -1,13 +1,29 @@
 import pickle
+import time
 from Game import WINDOW_SIZE
 from UserPlayer import rgbString, makeLight, averageColors
 from tkinter import *
+from Enums import Directions
+import torch
+from DQN import DQN
+import os
+import threading
+
 
 def myMap(f, L):
     return list(map(f, L))
 
+
 def unzip(L):
     return [[a for a,b in row] for row in L], [[b for a,b in row] for row in L]
+
+
+def getPartitions(L, partitionSize):
+    res = []
+    for i in range(0, len(L), partitionSize):
+        partition = L[i:i + partitionSize]
+        res.append(partition)
+    return res
 
 intToRGB = {-1: (169, 169, 169),  # gray
             0: (255, 255, 255),  # white
@@ -20,22 +36,180 @@ intToRGB = {-1: (169, 169, 169),  # gray
             7: (32, 21, 11)  # brown
             }
 
-class StateActionPair(object):
-    def __init__(self, pair):
-        state, self.action = pair
+# a DataPoint consists of a starting state S, an action a taken in this state, a new state S' that the game reaches
+# after action a is taken in state S, and a reward R received. If the game ends after action a is taken in state S,
+# then S' is None
+class DataPoint(object):
+    def __init__(self, stateBitboard, action, nextStateBitboard, reward):
+        self.stateBitboard = stateBitboard
+        self.action = action
+        self.nextStateBitboard = nextStateBitboard
+        self.reward = reward
+
+    def __eq__(self, other):
+        # for thing in dir(self):
+        #     print(thing)
+        # print(self.state)
+        res = (isinstance(other, DataPoint) and
+                self.state.tolist() == other.stateBitboard and
+                self.action == other.action and
+                self.reward == other.reward)
+        if res:
+            if self.nextState is None:
+                return other.nextStateBitboard is None
+            else:
+                return self.nextState.tolist() == other.nextStateBitboard
+        return res
+
+    @staticmethod
+    def fromStates(state, action, nextState, reward):
+        assert isinstance(state, State)
+        assert isinstance(action, Directions)
+        assert nextState is None or isinstance(nextState, State)
+        stateBitboard = state.bitboard
+        nextStateBitboard = nextState.bitboard if nextState is not None else None
+        return DataPoint(stateBitboard, action, nextStateBitboard, reward)
+
+    @staticmethod
+    def fromCompressed(compressed):
+        sparseState, action, sparseNextState, reward = compressed
+        stateBitboard = DataPoint.fromSparseBord(sparseState)
+        nextStateBitboard = DataPoint.fromSparseBord(sparseNextState)
+        return DataPoint(stateBitboard, action, nextStateBitboard, reward)
+
+    @staticmethod
+    def getSparseBoard(bitboard):
+        if bitboard is None:
+            return None
+        onPoints = []
+        layers, rows, cols = len(bitboard), len(bitboard[0]), len(bitboard[0][0])
+        assert(layers == State.BITBOARD_DEPTH and rows == WINDOW_SIZE and cols == WINDOW_SIZE)
+        for layer in range(layers):
+            for row in range(rows):
+                for col in range(cols):
+                    if bitboard[layer][row][col] == 1:
+                        coordinate = (layer, row, col)
+                        onPoints.append(coordinate)
+        return onPoints
+
+    @staticmethod
+    def fromSparseBord(sparseBitboard):
+        if sparseBitboard is None:
+            return None
+        bitboard = [[[0] * WINDOW_SIZE for _ in range(WINDOW_SIZE)] for _ in range(State.BITBOARD_DEPTH)]
+        for coordinate in sparseBitboard:
+            layer, row, col = coordinate
+            bitboard[layer][row][col] = 1
+        return bitboard
+
+    def compressed(self):
+        sparseState = DataPoint.getSparseBoard(self.stateBitboard)
+        sparseNextState = DataPoint.getSparseBoard(self.nextStateBitboard)
+        return sparseState, self.action, sparseNextState, self.reward
+
+    def drawBoard(self, canvas, data):
+        self.state.drawBoard(canvas, data)
+        canvas.create_text(50, 50, text="reward: %d" % self.reward)
+
+    def drawData(self, canvas, data):
+        self.state.drawData(canvas, data)
+        canvas.create_text(50, 50, text="reward: %d" % self.reward)
+
+    @staticmethod
+    def parseFile(path):
+        file = open(path, 'rb')
+        data = pickle.load(file)
+        file.close()
+
+        points = []
+        for i in range(len(data)):
+            s, action = data[i]
+            currentState = State(s)
+            nextS, _ = data[i + 1] if i + 1 < len(data) else (None, None)
+            nextState = State(nextS) if nextS is not None else None
+            nextStateScore = nextState.score if nextState is not None else 0
+            reward = nextStateScore - currentState.score
+            points.append(DataPoint(currentState, action, nextState, reward).compressed())
+        return points
+
+    # parses all files in the given directory whose names match the given regex
+    # stores the result in the given path
+    @staticmethod
+    def parseData(inputDirectory, regex, outputDirectory, outputFilenamePrefix):
+        assert(os.path.isdir(inputDirectory))
+        points = []
+        for filename in os.listdir(inputDirectory):
+            if regex.match(filename):
+                print("parsing", filename)
+                filePath = inputDirectory + '/' + filename
+                filePoints = DataPoint.parseFile(filePath)
+                points += filePoints
+
+        if not os.path.exists(outputDirectory):
+            os.makedirs(outputDirectory)
+
+        # save the files in partitions of length 1000
+        partitions = getPartitions(points, 1000)
+        for i in range(len(partitions)):
+            pointPartition = partitions[i]
+            outputFilename = "%s_%d.pickle" % (outputFilenamePrefix, i)
+            outputPath = outputDirectory + "/" + outputFilename
+            file = open(outputPath, 'wb+')
+            pickle.dump(pointPartition, file)
+            file.close()
+
+    @staticmethod
+    def readFile(path, resultList, i):
+        file = open(path, 'rb')
+        filePoints = pickle.load(file)
+        file.close()
+        filePoints = myMap(lambda x: DataPoint.fromCompressed(x), filePoints)
+        resultList[i] = filePoints
+
+    # reads in the parsed datapoints from files in the given directory whose names
+    # match the given regex, and returns a list of all points read in
+    @staticmethod
+    def readData(directory, regex):
+        assert(os.path.isdir(directory))
+        print("reading in data")
+        files = os.listdir(directory)
+        filePoints = [None] * len(files)
+        for i in range(len(files)):
+            filename = files[i]
+            if regex.match(filename):
+                path = directory + "/" + filename
+                DataPoint.readFile(path, filePoints, i)
+
+        points = []
+        for p in filePoints:
+            if p is not None:
+                points += p
+
+        return points
+
+
+class State(object):
+
+    BITBOARD_DEPTH = 6
+
+    def __init__(self, state):
         self.board, direction, self.heads, self.score = state
         playerCell = self.board[WINDOW_SIZE//2][WINDOW_SIZE//2]
-        assert(playerCell[0] == 0 or playerCell[1] == 0)
+        assert(playerCell[0] != playerCell[1])
         playerNum = playerCell[0] if playerCell[1] == 0 else playerCell[1]
         assert(playerNum > 0)
 
         territoryBoard, tailBoard = unzip(self.board)
         self.playerTerritory = self.getPlayerTerritoryPositions(territoryBoard, playerNum)
         self.enemyTerritory = self.getEnemyTerritoryPositions(territoryBoard, playerNum)
-        self.walls = self.getWallPositions(territoryBoard)
         self.playerTail = self.getPlayerTailPositions(tailBoard, playerNum)
         self.enemyTail = self.getEnemyTailPositions(tailBoard, playerNum)
         self.headsBoard = self.getHeadsBoard(self.heads)
+        self.walls = self.getWallPositions(territoryBoard)
+        self.bitboard = [self.playerTerritory, self.enemyTerritory,
+                                     self.playerTail, self.enemyTail,
+                                     self.headsBoard, self.walls]
+        assert(len(self.bitboard) == State.BITBOARD_DEPTH)
 
     def drawBoard(self, canvas, data):
         cellWidth = data.width / WINDOW_SIZE
@@ -143,27 +317,31 @@ class StateActionPair(object):
                 headsBoard[headRow][headCol] = 1
         return headsBoard
 
+
 def init(data):
     data.index = 0
     data.drawBoard = True
 
+
 def keyPressed(event, data):
     if event.keysym == "Left":
-        data.index = (data.index - 1) % len(data.pairs)
+        data.index = (data.index - 1) % len(data.points)
     elif event.keysym == "Right":
-        data.index = (data.index + 1) % len(data.pairs)
+        data.index = (data.index + 1) % len(data.points)
     elif event.keysym == "Up" or event.keysym == "Down":
         data.drawBoard = not data.drawBoard
 
+
 def redrawAll(canvas, data):
-    if data.drawBoard: data.pairs[data.index].drawBoard(canvas, data)
-    else: data.pairs[data.index].drawData(canvas, data)
+    if data.drawBoard: data.points[data.index].drawBoard(canvas, data)
+    else: data.points[data.index].drawData(canvas, data)
 
 ####################################
 # use the run function as-is
 ####################################
 
-def run(pairs, width=300, height=300):
+
+def run(points, width=300, height=300):
     def redrawAllWrapper(canvas, data):
         canvas.delete(ALL)
         canvas.create_rectangle(0, 0, data.width, data.height,
@@ -180,7 +358,7 @@ def run(pairs, width=300, height=300):
     data = Struct()
     data.width = width
     data.height = height
-    data.pairs = pairs
+    data.points = points
     root = Tk()
     init(data)
     # create the root and the canvas
@@ -193,17 +371,15 @@ def run(pairs, width=300, height=300):
     # and launch the app
     root.mainloop()  # blocks until window is closed
 
+
 if __name__ == "__main__":
-    directory = "Data"
-    path = "Data/player1_2018-05-18 19-51-19.pickle"
-    file = open(path, 'rb')
-    data = pickle.load(file)
-    file.close()
+    # regex = re.compile("player[12]_2018-05-20 .*\.pickle")
+    # DataPoint.parseData("gameplay_data", regex, "D:/paper.ai/parsed_data2", "2018-05-20_data")
 
-    pairs = []
-    for pair in data:
-        pairs.append(StateActionPair(pair))
+    regex = re.compile("2018-05-20_data_[0-9]*.pickle")
+    # regex = re.compile("2018-05-20_data_0.pickle")
 
-    pair = pairs[-1]
-    rows, cols = len(pair.board), len(pair.board[0])
-    run(pairs, 700, 700)
+    startTime = time.time()
+    points = DataPoint.readData("D:/paper.ai/parsed_data", regex)
+    print("time to read:", time.time() - startTime)
+    print(len(points))
