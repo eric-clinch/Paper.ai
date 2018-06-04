@@ -46,21 +46,6 @@ class DataPoint(object):
         self.nextStateBitboard = nextStateBitboard
         self.reward = reward
 
-    def __eq__(self, other):
-        # for thing in dir(self):
-        #     print(thing)
-        # print(self.state)
-        res = (isinstance(other, DataPoint) and
-                self.state.tolist() == other.stateBitboard and
-                self.action == other.action and
-                self.reward == other.reward)
-        if res:
-            if self.nextState is None:
-                return other.nextStateBitboard is None
-            else:
-                return self.nextState.tolist() == other.nextStateBitboard
-        return res
-
     @staticmethod
     def fromStates(state, action, nextState, reward):
         assert isinstance(state, State)
@@ -124,18 +109,22 @@ class DataPoint(object):
         points = []
         for i in range(len(data)):
             s, action = data[i]
+            if action == Directions.NULL:
+                continue  # ignore datapoints where we don't know the move
             currentState = State(s)
             nextS, _ = data[i + 1] if i + 1 < len(data) else (None, None)
             nextState = State(nextS) if nextS is not None else None
             nextStateScore = nextState.score if nextState is not None else 0
             reward = nextStateScore - currentState.score
-            points.append(DataPoint(currentState, action, nextState, reward).compressed())
+            if nextStateScore == 0:
+                reward = - WINDOW_SIZE * WINDOW_SIZE  # makes the reward for dying a constant
+            points.append(DataPoint.fromStates(currentState, action, nextState, reward).compressed())
         return points
 
     # parses all files in the given directory whose names match the given regex
     # stores the result in the given path
     @staticmethod
-    def parseData(inputDirectory, regex, outputDirectory, outputFilenamePrefix):
+    def parseData(inputDirectory, regex):
         assert(os.path.isdir(inputDirectory))
         points = []
         for filename in os.listdir(inputDirectory):
@@ -145,6 +134,10 @@ class DataPoint(object):
                 filePoints = DataPoint.parseFile(filePath)
                 points += filePoints
 
+        return points
+
+    @staticmethod
+    def storePoints(points, outputDirectory, outputFilenamePrefix):
         if not os.path.exists(outputDirectory):
             os.makedirs(outputDirectory)
 
@@ -159,12 +152,12 @@ class DataPoint(object):
             file.close()
 
     @staticmethod
-    def readFile(path, resultList, i):
+    def readFile(path):
         file = open(path, 'rb')
         filePoints = pickle.load(file)
         file.close()
         filePoints = myMap(lambda x: DataPoint.fromCompressed(x), filePoints)
-        resultList[i] = filePoints
+        return filePoints
 
     # reads in the parsed datapoints from files in the given directory whose names
     # match the given regex, and returns a list of all points read in
@@ -173,17 +166,12 @@ class DataPoint(object):
         assert(os.path.isdir(directory))
         print("reading in data")
         files = os.listdir(directory)
-        filePoints = [None] * len(files)
+        points = []
         for i in range(len(files)):
             filename = files[i]
             if regex.match(filename):
                 path = directory + "/" + filename
-                DataPoint.readFile(path, filePoints, i)
-
-        points = []
-        for p in filePoints:
-            if p is not None:
-                points += p
+                points += DataPoint.readFile(path)
 
         return points
 
@@ -336,12 +324,8 @@ def redrawAll(canvas, data):
     if data.drawBoard: data.points[data.index].drawBoard(canvas, data)
     else: data.points[data.index].drawData(canvas, data)
 
-####################################
-# use the run function as-is
-####################################
 
-
-def run(points, width=300, height=300):
+def run(points, width=600, height=600):
     def redrawAllWrapper(canvas, data):
         canvas.delete(ALL)
         canvas.create_rectangle(0, 0, data.width, data.height,
@@ -373,13 +357,21 @@ def run(points, width=300, height=300):
 
 
 if __name__ == "__main__":
+    file = open("gameplay_data/player1_2018-05-20 00-13-24.pickle", 'rb')
+    data = pickle.load(file)
+    file.close()
+    data = myMap(lambda x: State(x[0]), data)
+    run(data)
+
     # regex = re.compile("player[12]_2018-05-20 .*\.pickle")
-    # DataPoint.parseData("gameplay_data", regex, "D:/paper.ai/parsed_data2", "2018-05-20_data")
+    regex = re.compile("player1_2018-05-20 00-13-24\.pickle")
+    points = DataPoint.parseData("gameplay_data", regex)
+    # DataPoint.storePoints(points, "D:/paper.ai/parsed_data2", "2018-05-20_data")
 
-    regex = re.compile("2018-05-20_data_[0-9]*.pickle")
-    # regex = re.compile("2018-05-20_data_0.pickle")
 
-    startTime = time.time()
-    points = DataPoint.readData("D:/paper.ai/parsed_data", regex)
-    print("time to read:", time.time() - startTime)
-    print(len(points))
+    # regex = re.compile("2018-05-20_data_[0-9]*.pickle")
+
+    # startTime = time.time()
+    # points = DataPoint.readData("D:/paper.ai/parsed_data", regex)
+    # print("time to read:", time.time() - startTime)
+    # print(len(points))
