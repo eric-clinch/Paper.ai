@@ -48,30 +48,43 @@ VERTICALLY_FLIP_MOVE = {Directions.UP : Directions.DOWN, Directions.DOWN : Direc
                         Directions.LEFT : Directions.LEFT, Directions.RIGHT : Directions.RIGHT}
 
 
-# takes as input a gameState and a move, and returns a list of (gameState, move) pairs that are created by augmenting
-# the original gameState and move.
-def getAugmentedData(gameState, move):
+def mapAugmentation(augmentation, bitboard):
+    return list(map(augmentation, bitboard))
+
+
+# takes as input a bitboard and a move, and returns a list of (bitboard, move) pairs that are created by augmenting
+# the original bitboard and move.
+def getAugmentedData(bitboard, move):
     result = list()
-    result.append((gameState, move))
-    result.append((verticalFlip(gameState), VERTICALLY_FLIP_MOVE[move]))
+    result.append((bitboard, move))
+    result.append((mapAugmentation(verticalFlip, bitboard), VERTICALLY_FLIP_MOVE[move]))
 
     for _ in range(3):
-        gameState = rotateClockwise(gameState)
+        bitboard = mapAugmentation(rotateClockwise, bitboard)
         move = ROTATE_MOVE_CLOCKWISE[move]
 
-        result.append((gameState, move))
-        result.append((verticalFlip(gameState), VERTICALLY_FLIP_MOVE[move]))
+        result.append((bitboard, move))
+        result.append((mapAugmentation(verticalFlip, bitboard), VERTICALLY_FLIP_MOVE[move]))
 
     return result
 
 
-def getDataLoader(dataPoints, NN, gamma, batchSize, device, rewardFunction=lambda x: x):
+def getDataLoader(dataPoints, NN, gamma, batchSize, device, rewardFunction=lambda x: x, augment=False):
     trainingData = []
     for point in dataPoints:
         nextStateValue = getNextStateValue(point, NN, device)
         Q = torch.FloatTensor([rewardFunction(point.reward) + gamma * nextStateValue])
-        gameState = torch.FloatTensor(point.stateBitboard)
-        move = DirectionToInt[point.action]
 
-        trainingData.append((gameState, Q, move))
+        gameState = point.stateBitboard
+        move = point.action
+        if augment:
+            stateMovePairs = getAugmentedData(gameState, move)
+        else:
+            stateMovePairs = [(gameState, move)]
+
+        for gameState, move in stateMovePairs:
+            gameState = torch.FloatTensor(gameState)
+            moveInt = DirectionToInt[move]
+            trainingData.append((gameState, Q, moveInt))
+
     return torch.utils.data.DataLoader(trainingData, batch_size=batchSize, shuffle=True, num_workers=0)
