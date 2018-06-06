@@ -4,10 +4,7 @@ from Game import WINDOW_SIZE
 from UserPlayer import rgbString, makeLight, averageColors
 from tkinter import *
 from Enums import Directions
-import torch
-from DQN import DQN
 import os
-import threading
 
 
 def myMap(f, L):
@@ -116,8 +113,6 @@ class DataPoint(object):
             nextState = State(nextS) if nextS is not None else None
             nextStateScore = nextState.score if nextState is not None else 0
             reward = nextStateScore - currentState.score
-            if nextStateScore == 0:
-                reward = - WINDOW_SIZE * WINDOW_SIZE  # makes the reward for dying a constant
             points.append(DataPoint.fromStates(currentState, action, nextState, reward).compressed())
         return points
 
@@ -306,6 +301,11 @@ class State(object):
         return headsBoard
 
 
+######################################
+# GUI for viewing data and debugging #
+######################################
+
+
 def init(data):
     data.index = 0
     data.drawBoard = True
@@ -325,7 +325,7 @@ def redrawAll(canvas, data):
     else: data.points[data.index].drawData(canvas, data)
 
 
-def run(points, width=600, height=600):
+def run(gameplayPath, width=600, height=600):
     def redrawAllWrapper(canvas, data):
         canvas.delete(ALL)
         canvas.create_rectangle(0, 0, data.width, data.height,
@@ -342,7 +342,13 @@ def run(points, width=600, height=600):
     data = Struct()
     data.width = width
     data.height = height
+
+    file = open(gameplayPath, 'rb')
+    contents = pickle.load(file)
+    file.close()
+    points = myMap(lambda x: State(x[0]), contents)
     data.points = points
+
     root = Tk()
     init(data)
     # create the root and the canvas
@@ -357,21 +363,7 @@ def run(points, width=600, height=600):
 
 
 if __name__ == "__main__":
-    file = open("gameplay_data/player1_2018-05-20 00-13-24.pickle", 'rb')
-    data = pickle.load(file)
-    file.close()
-    data = myMap(lambda x: State(x[0]), data)
-    run(data)
-
-    # regex = re.compile("player[12]_2018-05-20 .*\.pickle")
-    regex = re.compile("player1_2018-05-20 00-13-24\.pickle")
+    regex = re.compile("player[12]_2018-05-20 .*\.pickle")
+    # regex = re.compile("player1_2018-05-20 00-13-24\.pickle")
     points = DataPoint.parseData("gameplay_data", regex)
-    # DataPoint.storePoints(points, "D:/paper.ai/parsed_data2", "2018-05-20_data")
-
-
-    # regex = re.compile("2018-05-20_data_[0-9]*.pickle")
-
-    # startTime = time.time()
-    # points = DataPoint.readData("D:/paper.ai/parsed_data", regex)
-    # print("time to read:", time.time() - startTime)
-    # print(len(points))
+    DataPoint.storePoints(points, "D:/paper.ai/parsed_data2", "2018-05-20_data")

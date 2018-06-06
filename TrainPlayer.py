@@ -15,7 +15,7 @@ import random
 import os
 
 
-def getLoss(NN, dataLoader, criterion):
+def getDataLoss(NN, dataLoader, criterion):
     runningLose = 0
     count = 0
     for data in dataLoader:
@@ -26,16 +26,27 @@ def getLoss(NN, dataLoader, criterion):
 
         outputs = NN(inputs)
 
-        targets = outputs.clone()
-        for i in range(len(actions)):
-            action = actions[i]
-            targets[i][action] = targetsValues[i]
-        targets = Variable(targets.to(device))
-
-        loss = criterion(outputs, targets)
+        loss = getLoss(outputs, targetsValues, actions, criterion)
         runningLose += loss.item()
     return runningLose / count
 
+
+# def getLoss(outputs, targetsValues, actions, criterion):
+#     targets = outputs.clone()
+#     for i in range(len(actions)):
+#         action = actions[i]
+#         targets[i][action] = targetsValues[i]
+#     targets = Variable(targets.to(device))
+#
+#     return criterion(outputs, targets)
+
+
+def getLoss(outputs, targetsValues, actions, criterion):
+    # indexes = torch.Tensor(actions).long()
+    indexes = actions.view(-1, 1)
+    actionQValues = torch.gather(outputs, 1, indexes)
+
+    return criterion(actionQValues, targetsValues)
 
 # trains the given nn on the given data for one epoch, then returns the average loss
 def trainOneEpoch(NN, dataLoader, criterion, optim):
@@ -50,13 +61,7 @@ def trainOneEpoch(NN, dataLoader, criterion, optim):
         optim.zero_grad()
         outputs = NN(inputs)
 
-        targets = outputs.clone()
-        for i in range(len(actions)):
-            action = actions[i]
-            targets[i][action] = targetsValues[i]
-        targets = Variable(targets.to(device))
-
-        loss = criterion(outputs, targets)
+        loss = getLoss(outputs, targetsValues, actions, criterion)
         loss.backward()
         optim.step()
         runningLose += loss.item()
@@ -68,7 +73,7 @@ def trainForNEpochs(NN, dataLoader, criterion, optim, epochs, verboseLevel):
     trainLoss = None
     for i in range(epochs):
         trainLoss = trainOneEpoch(NN, dataLoader, criterion, optim)
-        if verboseLevel >= 3: print("epoch %d training loss %f" % (i, trainLoss))
+        if verboseLevel >= 3: print("epoch %d training loss: %f" % (i, trainLoss))
     return trainLoss
 
 
@@ -80,18 +85,17 @@ def getTrainAndTest(points, trainRatio=0.8, shuffle=True):
     return points[:numTraining], points[numTraining:]
 
 
-def expandHorizon(NN, trainingData, testingData, epochs=10, verboseLevel=0):
-    criterion = nn.MSELoss()
+def expandHorizon(NN, trainingData, testingData, epochs, criterion, verboseLevel=0):
     optim = optimizer.Adam(NN.parameters(), lr=learningRate, weight_decay=weightDecay)
 
-    trainingLoss = getLoss(NN, trainingData, criterion)
-    testLoss = getLoss(NN, testingData, criterion)
+    trainingLoss = getDataLoss(NN, trainingData, criterion)
+    testLoss = getDataLoss(NN, testingData, criterion)
     if verboseLevel >= 2:
         print("initial training loss: %f, test loss: %f" % (trainingLoss, testLoss))
 
     startTime = time.time()
     trainingLoss = trainForNEpochs(NN, trainingData, criterion, optim, epochs, verboseLevel)
-    testLoss = getLoss(NN, testingData, criterion)
+    testLoss = getDataLoss(NN, testingData, criterion)
     if verboseLevel >= 2:
         print("time to expand agent horizon:", time.time() - startTime)
         print("final training loss: %f, test loss: %f\n" % (trainingLoss, testLoss))
@@ -99,18 +103,20 @@ def expandHorizon(NN, trainingData, testingData, epochs=10, verboseLevel=0):
     return trainingLoss, testLoss
 
 
-def train(NN, trainingPoints, testingPoints, horizonLength, verboseLevel=0, saveFormat=None, saveDirectory=None):
+def train(NN, trainingPoints, testingPoints, horizonLength, verboseLevel=0, rewardFunction=lambda x: x,
+          saveFormat=None, saveDirectory=None, epochsPerHerizon=10):
 
     if saveDirectory is not None and not os.path.exists(saveDirectory):
         os.makedirs(saveDirectory)
 
     startTime = time.time()
+    criterion = nn.SmoothL1Loss()
     for i in range(horizonLength):
         if verboseLevel >= 1:
             print("training horizon level %d" % i)
-        trainingData = getDataLoader(trainingPoints, NN, discountFactor, batchSize, device)
-        testingData = getDataLoader(testingPoints, NN, discountFactor, batchSize, device)
-        expandHorizon(NN, trainingData, testingData, verboseLevel=verboseLevel)
+        trainingData = getDataLoader(trainingPoints, NN, discountFactor, batchSize, device, rewardFunction)
+        testingData = getDataLoader(testingPoints, NN, discountFactor, batchSize, device, rewardFunction)
+        expandHorizon(NN, trainingData, testingData, epochsPerHerizon, criterion, verboseLevel=verboseLevel)
 
         if saveFormat is not None and saveDirectory is not None:
             saveFileName = saveFormat % i
@@ -126,29 +132,30 @@ if __name__ == "__main__":
     device = 'cpu'
     print("using device", device)
 
-    learningRate = 0.0005
+    learningRate = 0.0001
     weightDecay = 0.02
-    resultPath = "NNs/trained_NN"
+    resultPath = "NNs/clipped_trained_NN"
     verboseLevel = 3
+
+    def rewardFunction(x):
+        return 1 if x > 0 else -1 if x < 0 else 0
 
     NN = DQN().to(device)
 
-    # regex = re.compile("2018-05-20_data_[0-9]*.pickle")
-    regex = re.compile("2018-05-20_data_0.pickle")
+    regex = re.compile("2018-05-20_data_[0-9]*.pickle")
+    # regex = re.compile("2018-05-20_data_0.pickle")
 
     startTime = time.time()
     points = DataPoint.readData("D:/paper.ai/parsed_data", regex)
     print("time to read in data:", time.time() - startTime)
     trainingPoints, testingPoints = getTrainAndTest(points, shuffle=False)
 
-    discountFactor = 0.9
+    discountFactor = 0.95
     batchSize = 256
 
-    saveFormat = "horizon_level_%d"
+    saveFormat = "clipped_horizon_level_%d"
     saveDirectory = "NNs"
-    # train(NN, trainingPoints, testingPoints, 20, verboseLevel=verboseLevel,
-                 # saveFormat=saveFormat, saveDirectory=saveDirectory)
     train(NN, trainingPoints, testingPoints, 20, verboseLevel=verboseLevel,
-                 saveFormat=None, saveDirectory=saveDirectory)
+                 saveFormat=saveFormat, saveDirectory=saveDirectory)
 
     torch.save(NN.state_dict(), resultPath)
