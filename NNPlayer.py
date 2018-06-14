@@ -6,6 +6,8 @@ from Game import WINDOW_SIZE
 from DQN import DQN
 import torch
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 
 class NNPlayer(Player):
 
@@ -18,7 +20,7 @@ class NNPlayer(Player):
         state = (board, direction, heads, score)
         self.state = State(state)
 
-        self.NN = DQN()
+        self.NN = DQN().to(device)
         self.NN.train(False)
         self.NN.load_state_dict(torch.load(NNPath))
 
@@ -27,7 +29,7 @@ class NNPlayer(Player):
 
     def getMove(self):
         NNInput = torch.Tensor(self.state.bitboard)
-        NNInput = NNInput.unsqueeze(0)
+        NNInput = NNInput.unsqueeze(0).to(device)
         QValues = self.NN(NNInput)
         print("Q values:", QValues)
         _, decision = torch.max(QValues, 1)

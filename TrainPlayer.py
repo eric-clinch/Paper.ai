@@ -13,6 +13,9 @@ import re
 import time
 import random
 import os
+import copy
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 def getTrainAndTest(points, trainRatio=0.8, shuffle=True):
@@ -23,26 +26,27 @@ def getTrainAndTest(points, trainRatio=0.8, shuffle=True):
     return points[:numTraining], points[numTraining:]
 
 
-def getLoss(outputs, targets, actions):
-    indexes = actions.view(-1, 1)
-    actionQValues = torch.gather(outputs, 1, indexes)
+def getLoss(outputs, targets, actions, criterion):
+    indexes = actions.view(-1, 1).to(device)
+    actionQValues = torch.gather(outputs, 1, indexes).to(device)
+    targets = targets.to(device)
 
     loss = criterion(actionQValues, targets)
     return loss
 
 
-def getDataLoss(NN, dataLoader):
+def getDataLoss(NN, dataLoader, criterion):
     runningLose = 0
     count = 0
     for data in dataLoader:
-        inputs, targest, actions = data
+        inputs, targets, actions = data
 
         inputs = Variable(inputs.to(device))
         count += 1
 
         outputs = NN(inputs)
 
-        loss = getLoss(outputs, targest, actions)
+        loss = getLoss(outputs, targets, actions, criterion)
         runningLose += loss.item()
     return runningLose / count
 
@@ -60,14 +64,14 @@ def trainEpoch(NN, dataLoader, criterion, optim):
         optim.zero_grad()
         outputs = NN(inputs)
 
-        loss = getLoss(outputs, targets, actions)
+        loss = getLoss(outputs, targets, actions, criterion)
         loss.backward()
         optim.step()
         runningLose += loss.item()
     return runningLose / count
 
 
-def trainForNEpochs(NN, dataLoader, optim, epochs):
+def trainForNEpochs(NN, dataLoader, optim, criterion, epochs):
     assert(epochs > 0)
     trainLoss = None
     for i in range(epochs):
@@ -77,17 +81,17 @@ def trainForNEpochs(NN, dataLoader, optim, epochs):
     return trainLoss
 
 
-def expandHorizon(NN, trainingData, testingData, epochs):
+def expandHorizon(NN, trainingData, testingData, learningRate, weightDecay, criterion, epochs):
     optim = optimizer.Adam(NN.parameters(), lr=learningRate, weight_decay=weightDecay)
 
-    trainingLoss = getDataLoss(NN, trainingData)
-    testLoss = getDataLoss(NN, testingData)
+    trainingLoss = getDataLoss(NN, trainingData, criterion)
+    testLoss = getDataLoss(NN, testingData, criterion)
     if verboseLevel >= 2:
         print("initial training loss: %f, test loss: %f" % (trainingLoss, testLoss))
 
     startTime = time.time()
-    trainingLoss = trainForNEpochs(NN, trainingData, optim, epochs)
-    testLoss = getDataLoss(NN, testingData)
+    trainingLoss = trainForNEpochs(NN, trainingData, optim, criterion, epochs)
+    testLoss = getDataLoss(NN, testingData, criterion)
     if verboseLevel >= 2:
         print("time to expand agent horizon:", time.time() - startTime)
         print("final training loss: %f, test loss: %f\n" % (trainingLoss, testLoss))
@@ -95,11 +99,15 @@ def expandHorizon(NN, trainingData, testingData, epochs):
     return trainingLoss, testLoss
 
 
-def train(NN, trainingPoints, testingPoints, horizonLength, rewardFunction=lambda x: x,
-          saveFormat=None, saveDirectory=None, epochsPerHerizon=10):
+def train(NN, trainingPoints, testingPoints, horizonLength, learningRate=0.001, weightDecay=0.004,
+          rewardFunction=lambda x: x, saveFormat=None, saveDirectory=None, epochsPerHerizon=10):
+
+    criterion = nn.SmoothL1Loss()
 
     if saveDirectory is not None and not os.path.exists(saveDirectory):
         os.makedirs(saveDirectory)
+
+    testLoss = None
 
     startTime = time.time()
     for i in range(horizonLength):
@@ -107,9 +115,10 @@ def train(NN, trainingPoints, testingPoints, horizonLength, rewardFunction=lambd
             print("training horizon level %d" % i)
         trainingData = getDataLoader(trainingPoints, NN, discountFactor, batchSize, device, rewardFunction)
         testingData = getDataLoader(testingPoints, NN, discountFactor, batchSize, device, rewardFunction)
-        expandHorizon(NN, trainingData, testingData, epochsPerHerizon)
+        _, testLoss = expandHorizon(NN, trainingData, testingData, learningRate,
+                                    weightDecay, criterion, epochsPerHerizon)
 
-        if saveFormat is not None and saveDirectory is not None:
+        if saveFormat is not None and saveDirectory is not None and i % 5 == 0:
             saveFileName = saveFormat % i
             savePath = saveDirectory + "/" + saveFileName
             torch.save(NN.state_dict(), savePath)
@@ -117,25 +126,23 @@ def train(NN, trainingPoints, testingPoints, horizonLength, rewardFunction=lambd
     if verboseLevel >= 1:
         print("time to train:", time.time() - startTime)
 
+    return testLoss
+
 
 if __name__ == "__main__":
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    device = 'cpu'
     print("using device", device)
 
     learningRate = 0.0001
     weightDecay = 0.02
-    resultPath = "NNs/clipped_trained_NN"
     verboseLevel = 3
-    criterion = nn.MSELoss()
 
     def rewardFunction(x):
         return 1 if x > 0 else -1 if x < 0 else 0
 
     NN = DQN().to(device)
 
-    # regex = re.compile("2018-05-20_data_[0-9]*.pickle")
-    regex = re.compile("2018-05-20_data_0.pickle")
+    regex = re.compile("2018-05-20_data_[0-9]*.pickle")
+    # regex = re.compile("2018-05-20_data_0.pickle")
 
     startTime = time.time()
     points = DataPoint.readData("D:/paper.ai/parsed_data", regex)
@@ -143,11 +150,15 @@ if __name__ == "__main__":
     trainingPoints, testingPoints = getTrainAndTest(points, shuffle=False)
 
     discountFactor = 0.95
-    batchSize = 1
+    batchSize = 256
+    horizonLength = 20
+    epochsPerHorizon = 20
 
-    saveFormat = "clipped_horizon_level_%d"
+    saveFormat = "horizon_level_%d"
     saveDirectory = "NNs"
-    train(NN, trainingPoints, testingPoints, 20, saveFormat=None, saveDirectory=saveDirectory,
-          rewardFunction=rewardFunction)
+    resultPath = "NNs/trained_NN"
+
+    train(NN, trainingPoints, testingPoints, 150,
+                     saveFormat=saveFormat, saveDirectory=saveDirectory, epochsPerHerizon=epochsPerHorizon)
 
     torch.save(NN.state_dict(), resultPath)

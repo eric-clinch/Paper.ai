@@ -1,7 +1,12 @@
 
+# some parts of this code referenced from
+# https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
+
 import torch
 from Enums import Directions, DirectionToInt
 from torch.utils.data import Dataset
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 def getNextStateValue(point, DQN, device):
@@ -16,10 +21,15 @@ def getNextStateValue(point, DQN, device):
 
 
 def collate(batch):
-    gameStates = [elem[0] for elem in batch]
-    nextStateValues = [elem[1] for elem in batch]
-    moves = [elem[2] for elem in batch]
-    return torch.stack(gameStates, 0), nextStateValues, moves
+    # transpose the batch (see http://stackoverflow.com/a/19343/3343043 for
+    # detailed explanation).
+    transposed = zip(*batch)
+    states, nextStates, actions, rewards = transposed
+
+    nonFinalMask = torch.tensor(tuple(map(lambda s: s is not None, nextStates)), device=device, dtype=torch.uint8)
+    nonFinalNextStates = torch.cat([s for s in nextStates if s is not None])
+
+    return torch.stack(states), nonFinalMask, nonFinalNextStates, torch.cat(actions), torch.cat(rewards)
 
 
 def rotateClockwise(L):
@@ -73,7 +83,7 @@ def getDataLoader(dataPoints, NN, gamma, batchSize, device, rewardFunction=lambd
     trainingData = []
     for point in dataPoints:
         nextStateValue = getNextStateValue(point, NN, device)
-        Q = torch.FloatTensor([rewardFunction(point.reward) + gamma * nextStateValue])
+        Q = torch.FloatTensor([rewardFunction(point.reward) + gamma * nextStateValue], device=device)
 
         gameState = point.stateBitboard
         move = point.action
@@ -83,7 +93,7 @@ def getDataLoader(dataPoints, NN, gamma, batchSize, device, rewardFunction=lambd
             stateMovePairs = [(gameState, move)]
 
         for gameState, move in stateMovePairs:
-            gameState = torch.FloatTensor(gameState)
+            gameState = torch.FloatTensor(gameState, device=device)
             moveInt = DirectionToInt[move]
             trainingData.append((gameState, Q, moveInt))
 

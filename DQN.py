@@ -56,10 +56,11 @@ class DQN(nn.Module):
         super(DQN, self).__init__()
         self.inChannels = 6
 
-        self.conv = self.makeConvLayer(16)
-        self.res1 = self.makeResidualBlock(16)
-        self.res2 = self.makeResidualBlock(16)
-        self.res3 = self.makeResidualBlock(4)
+        self.conv = self.makeConvLayer(32)
+        self.res1 = self.makeResidualBlock(32)
+        self.res2 = self.makeResidualBlock(32)
+        self.res3 = self.makeResidualBlock(32)
+        self.res4 = self.makeResidualBlock(16)
         self.fc = nn.Linear(WINDOW_SIZE * WINDOW_SIZE * self.inChannels, 4)
 
     def makeConvLayer(self, outChannels):
@@ -83,6 +84,7 @@ class DQN(nn.Module):
         x = self.res1(x)
         x = self.res2(x)
         x = self.res3(x)
+        x = self.res4(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
         return x
