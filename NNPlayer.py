@@ -22,6 +22,7 @@ class NNPlayer(Player):
 
         self.NN = DQN().to(device)
         self.NN.train(False)
+        self.NN.eval()
         self.NN.load_state_dict(torch.load(NNPath))
 
     def setState(self, s):
