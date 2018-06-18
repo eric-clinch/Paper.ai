@@ -13,13 +13,14 @@ import re
 import time
 import random
 import os
-import copy
+import math
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 def getTrainAndTest(points, trainRatio=0.8, shuffle=True):
-    if shuffle: random.shuffle(points)
+    if shuffle:
+        random.shuffle(points)
     numPoints = len(points)
     numTraining = int(trainRatio * numPoints)
 
@@ -31,7 +32,7 @@ def getLoss(outputs, targets, actions, criterion):
     actionQValues = torch.gather(outputs, 1, indexes).to(device)
     targets = targets.to(device)
 
-    loss = criterion(actionQValues, targets)
+    loss = criterion(actionQValues, targets.unsqueeze(1))
     return loss
 
 
@@ -39,87 +40,81 @@ def getDataLoss(NN, dataLoader, criterion):
     runningLose = 0
     count = 0
     for data in dataLoader:
-        inputs, targets, actions = data
-
-        inputs = Variable(inputs.to(device))
         count += 1
+        states, nonFinalMask, nonFinalNextStates, actions, rewards = data
 
-        outputs = NN(inputs)
+        states = Variable(states.to(device))
+        nonFinalNextStates = nonFinalNextStates.to(device)
+        rewards = rewards.to(device)
 
-        loss = getLoss(outputs, targets, actions, criterion)
+        outputs = NN(states)
+        nextStateValues = torch.zeros(len(states), device=device, requires_grad=False)
+        nextStateValues[nonFinalMask] = NN(nonFinalNextStates).max(1)[0].detach()
+
+        expectedStateActionValues = (nextStateValues * discountFactor) + rewards
+
+        loss = getLoss(outputs, expectedStateActionValues, actions, criterion)
         runningLose += loss.item()
     return runningLose / count
 
 
 # trains the given nn on the given data for one epoch, then returns the average loss
-def trainEpoch(NN, dataLoader, criterion, optim):
+def trainEpoch(NN, targetNN, dataLoader, criterion, optim):
+    startTime = time.time()
+
     runningLose = 0
     count = 0
     for data in dataLoader:
-        inputs, targets, actions = data
-
-        inputs = Variable(inputs.to(device))
-        count += 1
-
         optim.zero_grad()
-        outputs = NN(inputs)
+        count += 1
+        states, nonFinalMask, nonFinalNextStates, actions, rewards = data
 
-        loss = getLoss(outputs, targets, actions, criterion)
+        states = Variable(states.to(device))
+        nonFinalNextStates = nonFinalNextStates.to(device)
+        rewards = rewards.to(device)
+
+        outputs = NN(states)
+        nextStateValues = torch.zeros(len(states), device=device, requires_grad=False)
+        nextStateValues[nonFinalMask] = targetNN(nonFinalNextStates).max(1)[0].detach()
+
+        expectedStateActionValues = (nextStateValues * discountFactor) + rewards
+
+        loss = getLoss(outputs, expectedStateActionValues, actions, criterion)
         loss.backward()
         optim.step()
         runningLose += loss.item()
+    if verboseLevel >= 2:
+        print("time to train epoch: %f" % (time.time() - startTime))
     return runningLose / count
 
 
-def trainForNEpochs(NN, dataLoader, optim, criterion, epochs):
-    assert(epochs > 0)
-    trainLoss = None
-    for i in range(epochs):
-        trainLoss = trainEpoch(NN, dataLoader, criterion, optim)
-        if verboseLevel >= 3:
-            print("epoch %d training loss: %f" % (i, trainLoss))
-    return trainLoss
-
-
-def expandHorizon(NN, trainingData, testingData, learningRate, weightDecay, criterion, epochs):
-    optim = optimizer.Adam(NN.parameters(), lr=learningRate, weight_decay=weightDecay)
-
-    trainingLoss = getDataLoss(NN, trainingData, criterion)
-    testLoss = getDataLoss(NN, testingData, criterion)
-    if verboseLevel >= 2:
-        print("initial training loss: %f, test loss: %f" % (trainingLoss, testLoss))
-
-    startTime = time.time()
-    trainingLoss = trainForNEpochs(NN, trainingData, optim, criterion, epochs)
-    testLoss = getDataLoss(NN, testingData, criterion)
-    if verboseLevel >= 2:
-        print("time to expand agent horizon:", time.time() - startTime)
-        print("final training loss: %f, test loss: %f\n" % (trainingLoss, testLoss))
-
-    return trainingLoss, testLoss
-
-
-def train(NN, trainingPoints, testingPoints, horizonLength, learningRate=0.001, weightDecay=0.004,
-          rewardFunction=lambda x: x, saveFormat=None, saveDirectory=None, epochsPerHerizon=10):
+def train(NN, targetNN, trainingPoints, epochs=1, learningRate=0.001, weightDecay=0.004,
+          rewardFunction=lambda x: x, saveDirectory=None, saveFileName=None, targetUpdateRate=5):
 
     criterion = nn.SmoothL1Loss()
+    optim = optimizer.Adam(NN.parameters(), lr=learningRate, weight_decay=weightDecay)
 
     if saveDirectory is not None and not os.path.exists(saveDirectory):
         os.makedirs(saveDirectory)
 
+    startTime = time.time()
     testLoss = None
+    trainingData = getDataLoader(trainingPoints, batchSize, rewardFunction, augment=True)
+    if verboseLevel >= 1:
+        print("time to get dataLoader: %f" % (time.time() - startTime))
+        print("training on ~%d points" % (len(trainingData) * batchSize))
 
     startTime = time.time()
-    for i in range(horizonLength):
-        if verboseLevel >= 1:
-            print("training horizon level %d" % i)
-        trainingData = getDataLoader(trainingPoints, NN, discountFactor, batchSize, device, rewardFunction)
-        testingData = getDataLoader(testingPoints, NN, discountFactor, batchSize, device, rewardFunction)
-        _, testLoss = expandHorizon(NN, trainingData, testingData, learningRate,
-                                    weightDecay, criterion, epochsPerHerizon)
+    for i in range(epochs):
+        if i % targetUpdateRate == 0 and i > 0:
+            print("updating targetNN")
+            targetNN.load_state_dict(NN.state_dict())
 
-        if saveFormat is not None and saveDirectory is not None and i % 5 == 0:
-            saveFileName = saveFormat % i
+        trainLoss = trainEpoch(NN, targetNN, trainingData, criterion, optim)
+        if verboseLevel >= 1:
+            print("epoch %d training loss: %f\n" % (i, trainLoss))
+
+        if saveFileName is not None and saveDirectory is not None and i % 10 == 0:
             savePath = saveDirectory + "/" + saveFileName
             torch.save(NN.state_dict(), savePath)
 
@@ -130,7 +125,8 @@ def train(NN, trainingPoints, testingPoints, horizonLength, learningRate=0.001, 
 
 
 if __name__ == "__main__":
-    print("using device", device)
+    print("using device=%s" % device)
+    NNPath = None
 
     learningRate = 0.0001
     weightDecay = 0.02
@@ -140,25 +136,29 @@ if __name__ == "__main__":
         return 1 if x > 0 else -1 if x < 0 else 0
 
     NN = DQN().to(device)
+    if NNPath is not None:
+        NN.load_state_dict(torch.load(NNPath))
 
-    regex = re.compile("2018-05-20_data_[0-9]*.pickle")
-    # regex = re.compile("2018-05-20_data_0.pickle")
+    # regex = re.compile("2018-05-20_data_[0-9]*.pickle")
+    regex = re.compile("2018-05-20_data_0.pickle")
 
     startTime = time.time()
     points = DataPoint.readData("D:/paper.ai/parsed_data", regex)
-    print("time to read in data:", time.time() - startTime)
-    trainingPoints, testingPoints = getTrainAndTest(points, shuffle=False)
+    print("time to read in data: %f\n" % (time.time() - startTime))
 
     discountFactor = 0.95
     batchSize = 256
-    horizonLength = 20
-    epochsPerHorizon = 20
+    epochs = 600
+    targetUpdateRate = 10
+    rewardFunction = torch.sqrt
 
-    saveFormat = "horizon_level_%d"
     saveDirectory = "NNs"
-    resultPath = "NNs/trained_NN"
+    saveFileName = "trained_NN_sqrt"
 
-    train(NN, trainingPoints, testingPoints, 150,
-                     saveFormat=saveFormat, saveDirectory=saveDirectory, epochsPerHerizon=epochsPerHorizon)
+    targetNN = DQN().to(device)
+    targetNN.eval()
+    targetNN.load_state_dict(NN.state_dict())
+    rewardFunction = math.sqrt
 
-    torch.save(NN.state_dict(), resultPath)
+    train(NN, targetNN, points, epochs=epochs, saveDirectory=saveDirectory,
+          saveFileName=None, targetUpdateRate=targetUpdateRate, rewardFunction=rewardFunction)
