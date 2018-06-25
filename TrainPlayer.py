@@ -17,6 +17,8 @@ import math
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+discountFactor = 0.95
+verboseLevel = 0
 
 def getTrainAndTest(points, trainRatio=0.8, shuffle=True):
     if shuffle:
@@ -88,8 +90,9 @@ def trainEpoch(NN, targetNN, dataLoader, criterion, optim):
     return runningLose / count
 
 
-def train(NN, targetNN, trainingPoints, epochs=1, learningRate=0.001, weightDecay=0.004,
-          rewardFunction=lambda x: x, saveDirectory=None, saveFileName=None, targetUpdateRate=5):
+def train(NN, targetNN, trainingPoints, epochs=1, learningRate=0.001, weightDecay=0.004, batchSize=256,
+          rewardFunction=lambda x: x, saveDirectory=None, saveFileName=None, targetUpdateRate=5,
+          augmentData=False):
 
     criterion = nn.SmoothL1Loss()
     optim = optimizer.Adam(NN.parameters(), lr=learningRate, weight_decay=weightDecay)
@@ -99,7 +102,7 @@ def train(NN, targetNN, trainingPoints, epochs=1, learningRate=0.001, weightDeca
 
     startTime = time.time()
     testLoss = None
-    trainingData = getDataLoader(trainingPoints, batchSize, rewardFunction, augment=True)
+    trainingData = getDataLoader(trainingPoints, batchSize, rewardFunction, augment=augmentData)
     if verboseLevel >= 1:
         print("time to get dataLoader: %f" % (time.time() - startTime))
         print("training on ~%d points" % (len(trainingData) * batchSize))
@@ -139,8 +142,8 @@ if __name__ == "__main__":
     if NNPath is not None:
         NN.load_state_dict(torch.load(NNPath))
 
-    # regex = re.compile("2018-05-20_data_[0-9]*.pickle")
-    regex = re.compile("2018-05-20_data_0.pickle")
+    regex = re.compile("2018-05-20_data_[0-9]*.pickle")
+    # regex = re.compile("2018-05-20_data_0.pickle")
 
     startTime = time.time()
     points = DataPoint.readData("D:/paper.ai/parsed_data", regex)
@@ -150,7 +153,8 @@ if __name__ == "__main__":
     batchSize = 256
     epochs = 600
     targetUpdateRate = 10
-    rewardFunction = torch.sqrt
+    rewardFunction = lambda x: math.sqrt(x) if x >= 0 else -math.sqrt(abs(x))
+    augmentData = True
 
     saveDirectory = "NNs"
     saveFileName = "trained_NN_sqrt"
@@ -158,7 +162,7 @@ if __name__ == "__main__":
     targetNN = DQN().to(device)
     targetNN.eval()
     targetNN.load_state_dict(NN.state_dict())
-    rewardFunction = math.sqrt
 
-    train(NN, targetNN, points, epochs=epochs, saveDirectory=saveDirectory,
-          saveFileName=None, targetUpdateRate=targetUpdateRate, rewardFunction=rewardFunction)
+    train(NN, targetNN, points, epochs=epochs, saveDirectory=saveDirectory, batchSize=batchSize,
+          saveFileName=saveFileName, targetUpdateRate=targetUpdateRate, rewardFunction=rewardFunction,
+          augmentData=augmentData)

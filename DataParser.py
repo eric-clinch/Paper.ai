@@ -98,23 +98,31 @@ class DataPoint(object):
         canvas.create_text(50, 50, text="reward: %d" % self.reward)
 
     @staticmethod
+    def parsePoints(data):
+        points = []
+
+        s, action = data[0]
+        currentState = State(s)
+
+        for i in range(len(data)):
+            nextS, nextAction = data[i + 1] if i + 1 < len(data) else (None, None)
+            nextState = State(nextS) if nextS is not None else None
+            nextStateScore = nextState.score if nextState is not None else 0
+            reward = nextStateScore - currentState.score
+            if action != Directions.NULL:
+                points.append(DataPoint.fromStates(currentState, action, nextState, reward))
+
+            currentState = nextState
+            action = nextAction
+
+        return points
+
+    @staticmethod
     def parseFile(path):
         file = open(path, 'rb')
         data = pickle.load(file)
         file.close()
-
-        points = []
-        for i in range(len(data)):
-            s, action = data[i]
-            if action == Directions.NULL:
-                continue  # ignore datapoints where we don't know the move
-            currentState = State(s)
-            nextS, _ = data[i + 1] if i + 1 < len(data) else (None, None)
-            nextState = State(nextS) if nextS is not None else None
-            nextStateScore = nextState.score if nextState is not None else 0
-            reward = nextStateScore - currentState.score
-            points.append(DataPoint.fromStates(currentState, action, nextState, reward).compressed())
-        return points
+        return DataPoint.parsePoints(data)
 
     # parses all files in the given directory whose names match the given regex
     # stores the result in the given path
@@ -127,6 +135,7 @@ class DataPoint(object):
                 print("parsing", filename)
                 filePath = inputDirectory + '/' + filename
                 filePoints = DataPoint.parseFile(filePath)
+                filePoints = myMap(lambda x: x.compressed(), filePoints)
                 points += filePoints
 
         return points
@@ -366,4 +375,4 @@ if __name__ == "__main__":
     regex = re.compile("player[12]_2018-05-20 .*\.pickle")
     # regex = re.compile("player1_2018-05-20 00-13-24\.pickle")
     points = DataPoint.parseData("gameplay_data", regex)
-    DataPoint.storePoints(points, "D:/paper.ai/parsed_data2", "2018-05-20_data")
+    DataPoint.storePoints(points, "D:/paper.ai/parsed_data3", "2018-05-20_data")
