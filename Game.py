@@ -111,12 +111,12 @@ class Player(object):
 
 # Game logic
 class Game(object):
-    def __init__(self, boardSize, players, respawn = True):
+    def __init__(self, boardSize, players, respawn = True, timerDelay=100):
         self.board = [[(0, 0)] * boardSize for i in range(boardSize)]
         # how far from the center of the start blob the blob extends
         self.startBlobExtent = 1
         self.players = []
-        self.timerDelay = 50
+        self.timerDelay = timerDelay
         self.running = True
         self.respawn = respawn
         for player in players:
