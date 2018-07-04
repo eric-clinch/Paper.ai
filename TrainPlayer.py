@@ -7,6 +7,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.optim as optimizer
 from DQN import DQN
+from DuelNetwork import DuelNetwork
 from DataParser import DataPoint
 from GetTrainingData import getDataLoader
 import re
@@ -17,7 +18,6 @@ import math
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-discountFactor = 0.95
 verboseLevel = 0
 
 def getTrainAndTest(points, trainRatio=0.8, shuffle=True):
@@ -38,7 +38,7 @@ def getLoss(outputs, targets, actions, criterion):
     return loss
 
 
-def getDataLoss(NN, dataLoader, criterion):
+def getDataLoss(NN, dataLoader, criterion, discountFactor):
     runningLose = 0
     count = 0
     for data in dataLoader:
@@ -61,7 +61,7 @@ def getDataLoss(NN, dataLoader, criterion):
 
 
 # trains the given nn on the given data for one epoch, then returns the average loss
-def trainEpoch(NN, targetNN, dataLoader, criterion, optim):
+def trainEpoch(NN, targetNN, dataLoader, criterion, optim, discountFactor):
     startTime = time.time()
 
     runningLose = 0
@@ -77,7 +77,11 @@ def trainEpoch(NN, targetNN, dataLoader, criterion, optim):
 
         outputs = NN(states)
         nextStateValues = torch.zeros(len(states), device=device, requires_grad=False)
-        nextStateValues[nonFinalMask] = targetNN(nonFinalNextStates).max(1)[0].detach()
+
+        _, optimalActions = torch.max(NN(nonFinalNextStates), 1)
+        optimalActions = optimalActions.view(-1, 1).to(device)
+        targetQs = targetNN(nonFinalNextStates).detach()
+        nextStateValues[nonFinalMask] = torch.gather(targetQs, 1, optimalActions).view(-1)
 
         expectedStateActionValues = (nextStateValues * discountFactor) + rewards
 
@@ -91,10 +95,10 @@ def trainEpoch(NN, targetNN, dataLoader, criterion, optim):
 
 
 def train(NN, targetNN, trainingPoints, epochs=1, learningRate=0.001, weightDecay=0.004, batchSize=256,
-          rewardFunction=lambda x: x, saveDirectory=None, saveFileName=None, targetUpdateRate=5,
+          rewardFunction=lambda x: x, saveDirectory=None, saveFileName=None, targetUpdateRate=5, discountFactor=0.99,
           augmentData=False):
 
-    criterion = nn.SmoothL1Loss()
+    criterion = nn.MSELoss()
     optim = optimizer.Adam(NN.parameters(), lr=learningRate, weight_decay=weightDecay)
 
     if saveDirectory is not None and not os.path.exists(saveDirectory):
@@ -113,7 +117,7 @@ def train(NN, targetNN, trainingPoints, epochs=1, learningRate=0.001, weightDeca
             print("updating targetNN")
             targetNN.load_state_dict(NN.state_dict())
 
-        trainLoss = trainEpoch(NN, targetNN, trainingData, criterion, optim)
+        trainLoss = trainEpoch(NN, targetNN, trainingData, criterion, optim, discountFactor)
         if verboseLevel >= 1:
             print("epoch %d training loss: %f\n" % (i, trainLoss))
 
@@ -138,12 +142,16 @@ if __name__ == "__main__":
     def rewardFunction(x):
         return 1 if x > 0 else -1 if x < 0 else 0
 
-    NN = DQN().to(device)
+    NN = DuelNetwork().to(device)
     if NNPath is not None:
         NN.load_state_dict(torch.load(NNPath))
 
-    regex = re.compile("2018-05-20_data_[0-9]*.pickle")
-    # regex = re.compile("2018-05-20_data_0.pickle")
+    targetNN = DuelNetwork().to(device)
+    targetNN.eval()
+    targetNN.load_state_dict(NN.state_dict())
+
+    # regex = re.compile("2018-05-20_data_[0-9]*.pickle")
+    regex = re.compile("2018-05-20_data_0.pickle")
 
     startTime = time.time()
     points = DataPoint.readData("D:/paper.ai/parsed_data", regex)
@@ -157,12 +165,8 @@ if __name__ == "__main__":
     augmentData = True
 
     saveDirectory = "NNs"
-    saveFileName = "trained_NN_sqrt"
-
-    targetNN = DQN().to(device)
-    targetNN.eval()
-    targetNN.load_state_dict(NN.state_dict())
+    saveFileName = "trained_NN"
 
     train(NN, targetNN, points, epochs=epochs, saveDirectory=saveDirectory, batchSize=batchSize,
           saveFileName=saveFileName, targetUpdateRate=targetUpdateRate, rewardFunction=rewardFunction,
-          augmentData=augmentData)
+          augmentData=augmentData, discountFactor=discountFactor)
