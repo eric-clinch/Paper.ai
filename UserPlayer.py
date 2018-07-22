@@ -1,8 +1,6 @@
 
 from Player import Player
 from Enums import Directions
-import time
-import random
 from Game import WINDOW_SIZE
 import threading
 
@@ -143,8 +141,3 @@ class UserPlayer(Player):
             self.root.mainloop()  # blocks until window is closed
         except:
             pass
-
-def randomBoard():
-    board = [[(random.randint(0, 2), random.randint(0, 2)) for _ in range(WINDOW_SIZE)]
-              for _ in range(WINDOW_SIZE)]
-    return board

@@ -60,7 +60,7 @@ class DQN(nn.Module):
         self.res1 = self.makeResidualBlock(32)
         self.res2 = self.makeResidualBlock(32)
         self.res3 = self.makeResidualBlock(32)
-        self.res4 = self.makeResidualBlock(16)
+        self.res4 = self.makeResidualBlock(32)
         self.fc = nn.Linear(WINDOW_SIZE * WINDOW_SIZE * self.inChannels, 4)
 
     def makeConvLayer(self, outChannels):

@@ -1,1 +1,8 @@
 __pycache__/
+.idea/
+gameplay_data/
+NNs/
+
+test.py
+
+*.txt

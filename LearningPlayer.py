@@ -3,14 +3,16 @@ from Player import Player
 from Enums import Directions, DIRECTIONS
 from DataParser import State
 from Game import WINDOW_SIZE
-from DQN import DQN
 from DataParser import DataPoint
 from TrainPlayer import train
 import torch
 import random
-import math
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+def greedy(QValues):
+    _, decision = torch.max(QValues, 1)
+    return decision
 
 class LearningPlayer(Player):
 
@@ -24,19 +26,24 @@ class LearningPlayer(Player):
     NN = None
     targetNN = None
     players = []
+    decisionFunction = greedy
 
+    # the given decision function should take a tensor of Q-values of size Nx4, and return a tensor of size N which
+    # stores the actions to be made. The Nx4 Q-values represent the Q-values of each of the 4 possible actions in
+    # N states.
     @staticmethod
-    def init(NNPath, replayBufferSize=15000, targetUpdateRate=1000, savePath=None, saveRate=1000, initialPoints=None):
+    def init(NNPath, architecture, replayBufferSize=60000, targetUpdateRate=5000, savePath=None, saveRate=5000,
+             initialPoints=None, decisionFunction=greedy, rewardFunction=lambda x: x):
         LearningPlayer.replayBuffer = ReplayMemory(replayBufferSize)
         LearningPlayer.targetUpdateRate = targetUpdateRate
-        LearningPlayer.rewardFunction = lambda x: math.sqrt(x) if x >= 0 else -math.sqrt(abs(x))
+        LearningPlayer.rewardFunction = rewardFunction
         LearningPlayer.savePath = savePath
         LearningPlayer.saveRate = saveRate
 
-        LearningPlayer.NN = DQN().to(device)
+        LearningPlayer.NN = architecture().to(device)
         LearningPlayer.NN.load_state_dict(torch.load(NNPath))
 
-        LearningPlayer.targetNN = DQN().to(device)
+        LearningPlayer.targetNN = architecture().to(device)
         LearningPlayer.targetNN.eval()
 
         # fill the replay buffer
@@ -44,6 +51,8 @@ class LearningPlayer(Player):
             initialPoints = initialPoints[:replayBufferSize]
             for point in initialPoints:
                 LearningPlayer.replayBuffer.push(point)
+
+        LearningPlayer.decisionFunction = decisionFunction
 
     def __init__(self):
         assert(LearningPlayer.NN is not None)  # LearningPlayer.init must be called before the constructor
@@ -81,7 +90,7 @@ class LearningPlayer(Player):
         inputs = [torch.Tensor(p.state.bitboard) for p in LearningPlayer.players]
         input = torch.stack(inputs).to(device)
         QValues = LearningPlayer.NN(input)
-        _, decisions = torch.max(QValues, 1)
+        decisions = LearningPlayer.decisionFunction(QValues)
 
         # set player moves
         for i in range(len(LearningPlayer.players)):

@@ -86,6 +86,11 @@ class DuelNetwork(nn.Module):
         x = self.res3(x)
         x = self.res4(x)
         x = x.view(x.size(0), -1)
+
         advantage = self.advantageLayer(x)
+        maxAdvantage, _ = advantage.max(1)
+        # the max value of the advantage component should be 0, so subtract the max element.
+        advantage = advantage - maxAdvantage.unsqueeze(1)
+
         value = self.valueLayer(x)
         return advantage + value

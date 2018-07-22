@@ -150,22 +150,22 @@ if __name__ == "__main__":
     targetNN.eval()
     targetNN.load_state_dict(NN.state_dict())
 
-    # regex = re.compile("2018-05-20_data_[0-9]*.pickle")
-    regex = re.compile("2018-05-20_data_0.pickle")
+    regex = re.compile("2018-05-20_data_[0-9]*.pickle")
+    # regex = re.compile("2018-05-20_data_0.pickle")
 
     startTime = time.time()
     points = DataPoint.readData("D:/paper.ai/parsed_data", regex)
     print("time to read in data: %f\n" % (time.time() - startTime))
 
-    discountFactor = 0.95
+    discountFactor = 0.99
     batchSize = 256
     epochs = 600
     targetUpdateRate = 10
-    rewardFunction = lambda x: math.sqrt(x) if x >= 0 else -math.sqrt(abs(x))
+    rewardFunction = lambda x: math.sqrt(x) if x >= 0 else 0
     augmentData = True
 
     saveDirectory = "NNs"
-    saveFileName = "trained_NN"
+    saveFileName = "trained_DuelNetwork"
 
     train(NN, targetNN, points, epochs=epochs, saveDirectory=saveDirectory, batchSize=batchSize,
           saveFileName=saveFileName, targetUpdateRate=targetUpdateRate, rewardFunction=rewardFunction,
